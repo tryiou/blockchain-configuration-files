@@ -686,6 +686,22 @@
     "wallet_conf": "digibyte--v7.17.2.conf"
   },
   {
+    "blockchain": "DigiByte",
+    "ticker": "DGB",
+    "ver_id": "digibyte--v8.22.0",
+    "ver_name": "DigiByte",
+    "conf_name": "digibyte.conf",
+    "dir_name_linux": "digibyte",
+    "dir_name_mac": "DigiByte",
+    "dir_name_win": "DigiByte",
+    "repo_url": "https://github.com/digibyte/digibyte",
+    "versions": [
+      "v8.22.0-rc3"
+    ],
+    "xbridge_conf": "digibyte--v7.17.2.conf",
+    "wallet_conf": "digibyte--v7.17.2.conf"
+  },
+  {
     "blockchain": "Digiwage",
     "ticker": "WAGE",
     "ver_id": "digiwage--v1.1.0",
