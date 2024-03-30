@@ -678,7 +678,7 @@
     "dir_name_linux": "digibyte",
     "dir_name_mac": "DigiByte",
     "dir_name_win": "DigiByte",
-    "repo_url": "https://github.com/digibyte/digibyte",
+    "repo_url": "https://github.com/DigiByte-Core/digibyte",
     "versions": [
       "v7.17.2"
     ],
@@ -694,7 +694,7 @@
     "dir_name_linux": "digibyte",
     "dir_name_mac": "DigiByte",
     "dir_name_win": "DigiByte",
-    "repo_url": "https://github.com/digibyte/digibyte",
+    "repo_url": "https://github.com/DigiByte-Core/digibyte",
     "versions": [
       "v8.22.0-rc3"
     ],
