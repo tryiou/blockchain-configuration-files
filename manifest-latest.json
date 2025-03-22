@@ -1744,7 +1744,7 @@
     "blockchain": "Pocketnet",
     "ticker": "PKOIN",
     "ver_id": "pkoin--0.22.13",
-    "ver_name": "PKOIN",
+    "ver_name": "pocketcoin",
     "conf_name": "pocketcoin.conf",
     "dir_name_linux": "pocketcoin",
     "dir_name_mac": "Pocketcoin",
@@ -1753,8 +1753,8 @@
     "versions": [
       "0.22.13"
     ],
-    "xbridge_conf": "pocketcoin--0.22.13.conf",
-    "wallet_conf": "pocketcoin--0.22.13.conf"
+    "xbridge_conf": "pkoin--0.22.13.conf",
+    "wallet_conf": "pkoin--0.22.13.conf"
   },
   {
     "blockchain": "Pura",
