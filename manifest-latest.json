@@ -1743,7 +1743,7 @@
   {
     "blockchain": "Pocketnet",
     "ticker": "PKOIN",
-    "ver_id": "pkoin--v0.22.13",
+    "ver_id": "pkoin--0.22.13",
     "ver_name": "PKOIN",
     "conf_name": "pocketcoin.conf",
     "dir_name_linux": "pocketcoin",
@@ -1751,10 +1751,10 @@
     "dir_name_win": "Pocketcoin",
     "repo_url": "https://github.com/pocketnetteam/pocketnet.core",
     "versions": [
-      "v0.22.13"
+      "0.22.13"
     ],
-    "xbridge_conf": "pocketcoin--v0.22.13.conf",
-    "wallet_conf": "pocketcoin--v0.22.13.conf"
+    "xbridge_conf": "pocketcoin--0.22.13.conf",
+    "wallet_conf": "pocketcoin--0.22.13.conf"
   },
   {
     "blockchain": "Pura",
