@@ -16,22 +16,6 @@
     "wallet_conf": "abosom--v1.0.0.conf"
   },
   {
-    "blockchain": "AeriumX",
-    "ticker": "AEX",
-    "ver_id": "aeriumx--v2.0",
-    "ver_name": "AeriumX",
-    "conf_name": "aeriumx.conf",
-    "dir_name_linux": "aeriumx",
-    "dir_name_mac": "AeriumX",
-    "dir_name_win": "AeriumX",
-    "repo_url": "https://github.com/aeriumcoin/AeriumX",
-    "versions": [
-      "v2.2"
-    ],
-    "xbridge_conf": "aeriumx--v2.0.conf",
-    "wallet_conf": "aeriumx--v2.0.conf"
-  },
-  {
     "blockchain": "Altbet",
     "ticker": "ABET",
     "ver_id": "abet--v3.4.1.0",
