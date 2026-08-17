@@ -17,22 +17,6 @@
     "wallet_conf": "argoneum--v1.2.3.4.conf"
   },
   {
-    "blockchain": "AustraliaCash",
-    "ticker": "AUS",
-    "ver_id": "australiacash--v0.17.4.0",
-    "ver_name": "AustraliaCash",
-    "conf_name": "australiacash.conf",
-    "dir_name_linux": "australiacash",
-    "dir_name_mac": "Australiacash",
-    "dir_name_win": "Australiacash",
-    "repo_url": "https://github.com/AustraliaCash/AustraliaCash-Core",
-    "versions": [
-      "v0.17.4.1"
-    ],
-    "xbridge_conf": "australiacash--v0.17.4.0.conf",
-    "wallet_conf": "australiacash--v0.17.4.0.conf"
-  },
-  {
     "blockchain": "Badcoin",
     "ticker": "BAD",
     "ver_id": "badcoin--v0.16.3-2",
