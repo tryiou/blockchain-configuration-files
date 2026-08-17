@@ -82,22 +82,6 @@
     "wallet_conf": "argoneum--v1.2.3.4.conf"
   },
   {
-    "blockchain": "ATBCoin",
-    "ticker": "ATB",
-    "ver_id": "atbcoin--v1.1.0",
-    "ver_name": "ATBCoin",
-    "conf_name": "atbcoin.conf",
-    "dir_name_linux": "ATBCoinWallet",
-    "dir_name_mac": "ATBCoinWallet",
-    "dir_name_win": "ATBCoinWallet",
-    "repo_url": "https://github.com/segwit/atbcoin",
-    "versions": [
-      "v1.1.0"
-    ],
-    "xbridge_conf": "atbcoin--v1.1.0.conf",
-    "wallet_conf": "atbcoin--v1.1.0.conf"
-  },
-  {
     "blockchain": "AustraliaCash",
     "ticker": "AUS",
     "ver_id": "australiacash--v0.17.4.0",
