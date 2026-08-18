@@ -49,22 +49,6 @@
     "wallet_conf": "bitcoincash--v29.1.0.conf"
   },
   {
-    "blockchain": "Bitcoin Diamond",
-    "ticker": "BCD",
-    "ver_id": "bitcoindiamond--v1.3.0",
-    "ver_name": "Bitcoin Diamond",
-    "conf_name": "bitcoin.conf",
-    "dir_name_linux": "bitcoindiamond",
-    "dir_name_mac": "BitcoinDiamond",
-    "dir_name_win": "BitcoinDiamond",
-    "repo_url": "https://github.com/eveybcd/BitcoinDiamond",
-    "versions": [
-      "v1.3.0"
-    ],
-    "xbridge_conf": "bitcoindiamond--v1.3.0.conf",
-    "wallet_conf": "bitcoindiamond--v1.3.0.conf"
-  },
-  {
     "blockchain": "Bitcoin Gold",
     "ticker": "BTG",
     "ver_id": "bitcoingold--v0.17.2",
