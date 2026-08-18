@@ -1946,7 +1946,7 @@
   {
     "blockchain": "Syscoin",
     "ticker": "SYS",
-    "ver_id": "syscoin--v5.0.3",
+    "ver_id": "syscoin--v5.1.0",
     "ver_name": "Syscoin",
     "conf_name": "syscoin.conf",
     "dir_name_linux": "syscoin",
@@ -1954,17 +1954,15 @@
     "dir_name_win": "Syscoin",
     "repo_url": "https://github.com/syscoin/syscoin",
     "versions": [
-      "v5.0.3",
-      "v5.0.4",
-      "v5.0.5"
+      "v5.1.0"
     ],
-    "xbridge_conf": "syscoin--v4.4.2.conf",
-    "wallet_conf": "syscoin--v4.4.2.conf"
+    "xbridge_conf": "syscoin--v5.1.0.conf",
+    "wallet_conf": "syscoin--v5.1.0.conf"
   },
   {
     "blockchain": "Syscoin Testnet",
     "ticker": "TSYS",
-    "ver_id": "systest--v4.3.0",
+    "ver_id": "systest--v5.1.0",
     "ver_name": "Syscoin Testnet",
     "conf_name": "syscoin.conf",
     "dir_name_linux": "syscoin",
@@ -1972,10 +1970,10 @@
     "dir_name_win": "Syscoin",
     "repo_url": "https://github.com/syscoin/syscoin",
     "versions": [
-      "v4.3.0"
+      "v5.1.0"
     ],
-    "xbridge_conf": "systest--v4.3.0.conf",
-    "wallet_conf": "systest--v4.3.0.conf"
+    "xbridge_conf": "systest--v5.1.0.conf",
+    "wallet_conf": "systest--v5.1.0.conf"
   },
   {
     "blockchain": "Terracoin",
