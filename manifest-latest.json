@@ -49,25 +49,6 @@
     "wallet_conf": "bitcoincash--v29.1.0.conf"
   },
   {
-    "blockchain": "BitGreen",
-    "ticker": "BITG",
-    "ver_id": "bitgreen--v1.4.0.8",
-    "ver_name": "BitGreen",
-    "conf_name": "bitgreen.conf",
-    "dir_name_linux": "bitgreen",
-    "dir_name_mac": "BitGreen",
-    "dir_name_win": "BitGreen",
-    "repo_url": "https://github.com/bitgreen/bitgreen",
-    "versions": [
-      "v1.4.0.8",
-      "v1.4.0.9",
-      "v1.5.0.1",
-      "v1.5.0.2"
-    ],
-    "xbridge_conf": "bitgreen--v1.4.0.8.conf",
-    "wallet_conf": "bitgreen--v1.4.0.8.conf"
-  },
-  {
     "blockchain": "BitCore",
     "ticker": "BTX",
     "ver_id": "bitcore--0.90.8.8.1",
