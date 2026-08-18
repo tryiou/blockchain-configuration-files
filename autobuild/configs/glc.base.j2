@@ -1,32 +1,32 @@
 {
-    "PURA": {
-        "Title": "Pura",
+    "GLC": {
+        "Title": "Goldcoin",
         "Address": "",
         "Ip": "127.0.0.1",
-        "rpcPort": "{{ rpcPort|default(55555)}}",
-        "p2pPort": "{{ p2pPort|default(44444)}}",
+        "rpcPort": "{{ rpcPort|default(8122)}}",
+        "p2pPort": "{{ p2pPort|default(8121)}}",
         "Username": "{{ rpcusername }}",
         "Password": "{{ rpcpassword }}",
-        "AddressPrefix": "55",
-        "ScriptPrefix": "16",
-        "SecretPrefix": "150",
+        "AddressPrefix": "32",
+        "ScriptPrefix": "50",
+        "SecretPrefix": "160",
         "COIN": "100000000",
         "MinimumAmount": "0",
         "DustAmount": "0",
         "CreateTxMethod": "BTC",
         "GetNewKeySupported": "true",
         "ImportWithNoScanSupported": "true",
-        "MinTxFee": "10000",
-        "BlockTime": "150",
+        "MinTxFee": "0",
+        "BlockTime": "120",
         "TxVersion": "1",
-        "FeePerByte": "20",
+        "FeePerByte": "225",
         "Confirmations": "0",
         "versions": {
-            "v1.3.7": {
-                "legacy": false,
+            "v0.14.7": {
+                "legacy": true,
                 "deprecatedrpc": false,
-                "xbridge_conf": "pura--v1.0.0.0.conf",
-                "wallet_conf": "pura--v1.0.0.0.conf"
+                "xbridge_conf": "goldcoin--v0.14.7.conf",
+                "wallet_conf": "goldcoin--v0.14.7.conf"
             }
         }
     }

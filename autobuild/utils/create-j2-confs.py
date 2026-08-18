@@ -102,8 +102,7 @@ with open('../../manifest-latest.json') as json_file:
                     'legacy': 'addresstype' in wallet_conf_data,
                     'deprecatedrpc': 'deprecatedrpc' in wallet_conf_data,
                     'xbridge_conf': chain['xbridge_conf'],
-                    'wallet_conf': chain['wallet_conf'],
-                    'GetNewKeySupported': 'GetNewKeySupported' in xbridge_conf_data
+                    'wallet_conf': chain['wallet_conf']
                 }
 
         template_data['versions'] = coin_base_j2_data_versions

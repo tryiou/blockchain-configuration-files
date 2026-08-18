@@ -1,32 +1,32 @@
 {
-    "UFO": {
-        "Title": "UniformFiscalObject",
+    "CHI": {
+        "Title": "Xaya",
         "Address": "",
         "Ip": "127.0.0.1",
-        "rpcPort": "{{ rpcPort|default(9888)}}",
-        "p2pPort": "{{ p2pPort|default(9887)}}",
+        "rpcPort": "{{ rpcPort|default(8396)}}",
+        "p2pPort": "{{ p2pPort|default(8395)}}",
         "Username": "{{ rpcusername }}",
         "Password": "{{ rpcpassword }}",
-        "AddressPrefix": "27",
-        "ScriptPrefix": "68",
-        "SecretPrefix": "155",
+        "AddressPrefix": "28",
+        "ScriptPrefix": "30",
+        "SecretPrefix": "130",
         "COIN": "100000000",
         "MinimumAmount": "0",
         "DustAmount": "0",
         "CreateTxMethod": "BTC",
         "GetNewKeySupported": "true",
         "ImportWithNoScanSupported": "true",
-        "MinTxFee": "200000",
-        "BlockTime": "90",
+        "MinTxFee": "32000",
+        "BlockTime": "30",
         "TxVersion": "2",
-        "FeePerByte": "400",
+        "FeePerByte": "1000",
         "Confirmations": "0",
         "versions": {
-            "v0.18.0": {
+            "v1.4.1": {
                 "legacy": true,
                 "deprecatedrpc": false,
-                "xbridge_conf": "ufocoin--v0.16.1.conf",
-                "wallet_conf": "ufocoin--v0.18.0.conf"
+                "xbridge_conf": "xaya--v1.4.1.conf",
+                "wallet_conf": "xaya--v1.4.1.conf"
             }
         }
     }
