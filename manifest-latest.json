@@ -49,22 +49,6 @@
     "wallet_conf": "bitcoincash--v29.1.0.conf"
   },
   {
-    "blockchain": "Bitcoin Gold",
-    "ticker": "BTG",
-    "ver_id": "bitcoingold--v0.17.2",
-    "ver_name": "Bitcoin Gold",
-    "conf_name": "bitcoingold.conf",
-    "dir_name_linux": "bitcoingold",
-    "dir_name_mac": "BitcoinGold",
-    "dir_name_win": "BitcoinGold",
-    "repo_url": "https://github.com/BTCGPU/BTCGPU",
-    "versions": [
-      "v0.17.2"
-    ],
-    "xbridge_conf": "bitcoingold--v0.17.2.conf",
-    "wallet_conf": "bitcoingold--v0.17.2.conf"
-  },
-  {
     "blockchain": "BitGreen",
     "ticker": "BITG",
     "ver_id": "bitgreen--v1.4.0.8",
