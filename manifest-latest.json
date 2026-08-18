@@ -57,14 +57,9 @@
     "dir_name_linux": "bitcore",
     "dir_name_mac": "BitCore",
     "dir_name_win": "BitCore",
-    "repo_url": "https://github.com/LIMXTEC/BitCore",
+    "repo_url": "https://github.com/bitcore-btx/BitCore",
     "versions": [
-      "0.90.8.8.1",
-      "0.90.8.9",
-      "0.90.8.10",
-      "0.90.8.11",
-      "0.90.9.0",
-      "0.90.9.1"
+      "0.90.9.10"
     ],
     "xbridge_conf": "bitcore--0.15.2.0.0.conf",
     "wallet_conf": "bitcore--0.90.8.8.1.conf"
