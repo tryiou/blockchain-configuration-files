@@ -159,18 +159,18 @@
   {
     "blockchain": "Bitcoin Cash",
     "ticker": "BCH",
-    "ver_id": "bitcoincash--v0.21.11",
+    "ver_id": "bitcoincash--v29.1.0",
     "ver_name": "Bitcoin Cash",
     "conf_name": "bitcoin.conf",
     "dir_name_linux": "bitcoincash",
     "dir_name_mac": "BitcoinCash",
     "dir_name_win": "BitcoinCash",
-    "repo_url": "https://github.com/Bitcoin-ABC/bitcoin-abc",
+    "repo_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node",
     "versions": [
-      "v0.21.11"
+      "v29.1.0"
     ],
-    "xbridge_conf": "bitcoincash--v0.21.11.conf",
-    "wallet_conf": "bitcoincash--v0.21.11.conf"
+    "xbridge_conf": "bitcoincash--v29.1.0.conf",
+    "wallet_conf": "bitcoincash--v29.1.0.conf"
   },
   {
     "blockchain": "Bitcoin CZ",
