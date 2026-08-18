@@ -49,22 +49,6 @@
     "wallet_conf": "bitcoincash--v29.1.0.conf"
   },
   {
-    "blockchain": "Bitcoin CZ",
-    "ticker": "BCZ",
-    "ver_id": "bcz--6.0.0.8",
-    "ver_name": "Bitcoin CZ",
-    "conf_name": "bcz.conf",
-    "dir_name_linux": "bcz",
-    "dir_name_mac": "BCZ",
-    "dir_name_win": "BCZ",
-    "repo_url": "https://github.com/SpecialCoins/bitcoincz",
-    "versions": [
-      "6.0.3.2"
-    ],
-    "xbridge_conf": "bcz--6.0.0.8.conf",
-    "wallet_conf": "bcz--6.0.0.8.conf"
-  },
-  {
     "blockchain": "Bitcoin Diamond",
     "ticker": "BCD",
     "ver_id": "bitcoindiamond--v1.3.0",
