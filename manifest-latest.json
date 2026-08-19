@@ -144,7 +144,7 @@
   {
     "blockchain": "DigiByte",
     "ticker": "DGB",
-    "ver_id": "digibyte--v7.17.2",
+    "ver_id": "digibyte--v9.26.5",
     "ver_name": "DigiByte",
     "conf_name": "digibyte.conf",
     "dir_name_linux": "digibyte",
@@ -152,27 +152,10 @@
     "dir_name_win": "DigiByte",
     "repo_url": "https://github.com/DigiByte-Core/digibyte",
     "versions": [
-      "v7.17.2"
+      "v9.26.5"
     ],
-    "xbridge_conf": "digibyte--v7.17.2.conf",
-    "wallet_conf": "digibyte--v7.17.2.conf"
-  },
-  {
-    "blockchain": "DigiByte",
-    "ticker": "DGB",
-    "ver_id": "digibyte--v8.22.0",
-    "ver_name": "DigiByte",
-    "conf_name": "digibyte.conf",
-    "dir_name_linux": "digibyte",
-    "dir_name_mac": "DigiByte",
-    "dir_name_win": "DigiByte",
-    "repo_url": "https://github.com/DigiByte-Core/digibyte",
-    "versions": [
-      "v8.22.0-rc3",
-      "v8.26.2"
-    ],
-    "xbridge_conf": "digibyte--v7.17.2.conf",
-    "wallet_conf": "digibyte--v7.17.2.conf"
+    "xbridge_conf": "digibyte--v9.26.5.conf",
+    "wallet_conf": "digibyte--v9.26.5.conf"
   },
   {
     "blockchain": "Digiwage",
