@@ -142,22 +142,6 @@
     "wallet_conf": "dash--v23.1.8.conf"
   },
   {
-    "blockchain": "DeVault",
-    "ticker": "DVT",
-    "ver_id": "devault--v1.1.7",
-    "ver_name": "DeVault",
-    "conf_name": "devault.conf",
-    "dir_name_linux": "devault",
-    "dir_name_mac": "DeVault",
-    "dir_name_win": "DeVault",
-    "repo_url": "https://github.com/devaultcrypto/devault",
-    "versions": [
-      "v1.1.7"
-    ],
-    "xbridge_conf": "devault--v1.1.7.conf",
-    "wallet_conf": "devault--v1.1.7.conf"
-  },
-  {
     "blockchain": "Diamond",
     "ticker": "DMD",
     "ver_id": "diamond--v3.0.1.1",
