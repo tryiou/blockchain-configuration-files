@@ -109,22 +109,6 @@
     "wallet_conf": "blocktest--v4.2.0.conf"
   },
   {
-    "blockchain": "Chaincoin",
-    "ticker": "CHC",
-    "ver_id": "chaincoin--v0.18.1",
-    "ver_name": "Chaincoin",
-    "conf_name": "chaincoin.conf",
-    "dir_name_linux": "chaincoincore",
-    "dir_name_mac": "Chaincoin",
-    "dir_name_win": "Chaincoin",
-    "repo_url": "https://github.com/chaincoin/chaincoin",
-    "versions": [
-      "v0.18"
-    ],
-    "xbridge_conf": "chaincoin--v0.18.1.conf",
-    "wallet_conf": "chaincoin--v0.18.1.conf"
-  },
-  {
     "blockchain": "Civitas",
     "ticker": "CIV",
     "ver_id": "civitas--v1.2.2",
