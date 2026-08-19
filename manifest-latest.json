@@ -142,22 +142,6 @@
     "wallet_conf": "dash--v23.1.8.conf"
   },
   {
-    "blockchain": "Diamond",
-    "ticker": "DMD",
-    "ver_id": "diamond--v3.0.1.1",
-    "ver_name": "Diamond",
-    "conf_name": "diamond.conf",
-    "dir_name_linux": "DMDV3",
-    "dir_name_mac": "DMDV3",
-    "dir_name_win": "DMDV3",
-    "repo_url": "https://github.com/DMDcoin/Diamond",
-    "versions": [
-      "3.0.1.3"
-    ],
-    "xbridge_conf": "diamond--v3.0.1.1.conf",
-    "wallet_conf": "diamond--v3.0.1.1.conf"
-  },
-  {
     "blockchain": "DigiByte",
     "ticker": "DGB",
     "ver_id": "digibyte--v7.17.2",
