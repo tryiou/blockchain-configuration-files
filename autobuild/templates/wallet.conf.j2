@@ -9,7 +9,27 @@ rpcport={{ rpcPort }}
 {% elif testnet is sameas true %}
 testnet=1 
 {% endif %}
-txindex=1
+{% if txindex is defined %}
+txindex={{ txindex }}
+{% endif %}
+{% if enableaccounts is defined %}
+enableaccounts={{ enableaccounts }}
+{% endif %}
+{% if staking is defined %}
+staking={{ staking }}
+{% endif %}
+{% if blocksonly is defined %}
+blocksonly={{ blocksonly }}
+{% endif %}
+{% if walletbroadcast is defined %}
+walletbroadcast={{ walletbroadcast }}
+{% endif %}
+{% if prune is defined %}
+prune={{ prune }}
+{% endif %}
+{% if daemon is defined %}
+daemon={{ daemon }}
+{% endif %}
 
 {% if legacy is defined and legacy is sameas true %}
 # Legacy addresses must be used
