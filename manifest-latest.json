@@ -142,22 +142,6 @@
     "wallet_conf": "dash--v23.1.8.conf"
   },
   {
-    "blockchain": "Desire",
-    "ticker": "DSR",
-    "ver_id": "desire--Desire-v.0.12.2.2.1",
-    "ver_name": "Desire",
-    "conf_name": "desire.conf",
-    "dir_name_linux": "desirecore",
-    "dir_name_mac": "DesireCore",
-    "dir_name_win": "DesireCore",
-    "repo_url": "https://github.com/lazyboozer/Desire",
-    "versions": [
-      "Desire-v.0.12.2.2"
-    ],
-    "xbridge_conf": "desire--desire-v.0.12.2.2.1.conf",
-    "wallet_conf": "desire--desire-v.0.12.2.2.1.conf"
-  },
-  {
     "blockchain": "DeVault",
     "ticker": "DVT",
     "ver_id": "devault--v1.1.7",
