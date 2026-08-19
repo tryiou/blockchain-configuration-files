@@ -126,22 +126,6 @@
     "wallet_conf": "colossusxt--v1.2.5.conf"
   },
   {
-    "blockchain": "Crave",
-    "ticker": "CRAVE",
-    "ver_id": "crave--v2.5.0.3",
-    "ver_name": "Crave",
-    "conf_name": "crave.conf",
-    "dir_name_linux": "craveng",
-    "dir_name_mac": "CraveNG",
-    "dir_name_win": "CraveNG",
-    "repo_url": "https://github.com/Crave-Community-Project/Crave-Project",
-    "versions": [
-      "v2.5.2"
-    ],
-    "xbridge_conf": "crave--v2.5.0.3.conf",
-    "wallet_conf": "crave--v2.5.0.3.conf"
-  },
-  {
     "blockchain": "Dash",
     "ticker": "DASH",
     "ver_id": "dash--v19.2.0",
