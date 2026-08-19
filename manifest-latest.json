@@ -109,22 +109,6 @@
     "wallet_conf": "blocktest--v4.2.0.conf"
   },
   {
-    "blockchain": "Civitas",
-    "ticker": "CIV",
-    "ver_id": "civitas--v1.2.2",
-    "ver_name": "Civitas",
-    "conf_name": "civitas.conf",
-    "dir_name_linux": "civitas",
-    "dir_name_mac": "Civitas",
-    "dir_name_win": "Civitas",
-    "repo_url": "https://github.com/eastcoastcrypto/Civitas",
-    "versions": [
-      "v1.2.2"
-    ],
-    "xbridge_conf": "civitas--v1.2.2.conf",
-    "wallet_conf": "civitas--v1.2.2.conf"
-  },
-  {
     "blockchain": "ColossusXT",
     "ticker": "COLX",
     "ver_id": "ColossusXT--v1.2.1",
