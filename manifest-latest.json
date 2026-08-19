@@ -109,22 +109,6 @@
     "wallet_conf": "blocktest--v4.2.0.conf"
   },
   {
-    "blockchain": "Carebit",
-    "ticker": "CARE",
-    "ver_id": "carebitcoin--v3.0.0.0",
-    "ver_name": "Carebit",
-    "conf_name": "carebitcoin.conf",
-    "dir_name_linux": "carebitcoin",
-    "dir_name_mac": "CarebitCoin",
-    "dir_name_win": "CarebitCoin",
-    "repo_url": "https://github.com/carebitcoin/carebitcoin",
-    "versions": [
-      "v5.0.0"
-    ],
-    "xbridge_conf": "carebitcoin--v3.0.0.0.conf",
-    "wallet_conf": "carebitcoin--v3.0.0.0.conf"
-  },
-  {
     "blockchain": "CbdHealthNetwork",
     "ticker": "CHN",
     "ver_id": "cbdhealthnetwork--wallets-source-daemon",
