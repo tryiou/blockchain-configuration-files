@@ -274,22 +274,6 @@
     "wallet_conf": "goldcoin--v0.15.0.conf"
   },
   {
-    "blockchain": "Innova",
-    "ticker": "INN",
-    "ver_id": "innova--v4.3.8.6",
-    "ver_name": "Innova",
-    "conf_name": "innova.conf",
-    "dir_name_linux": "innova",
-    "dir_name_mac": "Innova",
-    "dir_name_win": "Innova",
-    "repo_url": "https://github.com/innova-foundation/innova",
-    "versions": [
-      "v4.3.8.8"
-    ],
-    "xbridge_conf": "innova--v4.3.8.6.conf",
-    "wallet_conf": "innova--v4.3.8.6.conf"
-  },
-  {
     "blockchain": "Ixcoin",
     "ticker": "IXC",
     "ver_id": "ixcoin--v0.14.1",
