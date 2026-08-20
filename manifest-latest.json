@@ -274,22 +274,6 @@
     "wallet_conf": "gincoin--1.1.0.0.conf"
   },
   {
-    "blockchain": "GoByte",
-    "ticker": "GBX",
-    "ver_id": "gobyte--v0.16.2.1",
-    "ver_name": "GoByte",
-    "conf_name": "gobyte.conf",
-    "dir_name_linux": "gobytecore",
-    "dir_name_mac": "GoByteCore",
-    "dir_name_win": "GoByteCore",
-    "repo_url": "https://github.com/gobytecoin/gobyte",
-    "versions": [
-      "v0.16.2.1"
-    ],
-    "xbridge_conf": "gobyte--v0.16.2.1.conf",
-    "wallet_conf": "gobyte--v0.16.2.1.conf"
-  },
-  {
     "blockchain": "Goldcoin",
     "ticker": "GLC",
     "ver_id": "goldcoin--0.14.7",
