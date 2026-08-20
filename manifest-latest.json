@@ -192,7 +192,7 @@
   {
     "blockchain": "DogeCash",
     "ticker": "DOGEC",
-    "ver_id": "dogecash--5.4.4",
+    "ver_id": "dogecash--5.5.1",
     "ver_name": "DogeCash",
     "conf_name": "dogecash.conf",
     "dir_name_linux": "dogecash",
@@ -200,10 +200,10 @@
     "dir_name_win": "DogeCashCore",
     "repo_url": "https://github.com/dogecash/dogecash",
     "versions": [
-      "5.4.4"
+      "5.5.1"
     ],
-    "xbridge_conf": "dogecash--5.4.4.conf",
-    "wallet_conf": "dogecash--5.4.4.conf"
+    "xbridge_conf": "dogecash--5.5.1.conf",
+    "wallet_conf": "dogecash--5.5.1.conf"
   },
   {
     "blockchain": "Dogecoin",
