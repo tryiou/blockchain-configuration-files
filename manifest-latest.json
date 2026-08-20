@@ -258,22 +258,6 @@
     "wallet_conf": "fujicoin--v30.0.conf"
   },
   {
-    "blockchain": "GINcoin",
-    "ticker": "GIN",
-    "ver_id": "gincoin--1.1.0.0",
-    "ver_name": "GINcoin",
-    "conf_name": "gincoin.conf",
-    "dir_name_linux": "gincoincore",
-    "dir_name_mac": "GincoinCore",
-    "dir_name_win": "GincoinCore",
-    "repo_url": "https://github.com/GIN-coin/gincoin-core",
-    "versions": [
-      "v1.3.0.0"
-    ],
-    "xbridge_conf": "gincoin--1.1.0.0.conf",
-    "wallet_conf": "gincoin--1.1.0.0.conf"
-  },
-  {
     "blockchain": "Goldcoin",
     "ticker": "GLC",
     "ver_id": "goldcoin--0.14.7",
