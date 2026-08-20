@@ -242,22 +242,6 @@
     "wallet_conf": "emercoin--v0.8.5emc.conf"
   },
   {
-    "blockchain": "FantasyGold",
-    "ticker": "FGC",
-    "ver_id": "fantasygold--2.0.0",
-    "ver_name": "FantasyGold",
-    "conf_name": "fantasygold.conf",
-    "dir_name_linux": "fantasygold",
-    "dir_name_mac": "FantasyGold",
-    "dir_name_win": "FantasyGold",
-    "repo_url": "https://github.com/FantasyGold/FantasyGold-Core",
-    "versions": [
-      "2.19.1"
-    ],
-    "xbridge_conf": "fantasygold--2.0.0.conf",
-    "wallet_conf": "fantasygold--2.0.0.conf"
-  },
-  {
     "blockchain": "Flo",
     "ticker": "FLO",
     "ver_id": "flo--v0.15.0.3",
