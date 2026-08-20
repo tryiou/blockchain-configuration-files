@@ -258,22 +258,6 @@
     "wallet_conf": "fujicoin--v30.0.conf"
   },
   {
-    "blockchain": "GambleCoin",
-    "ticker": "GMCN",
-    "ver_id": "gamblecoin--1.1.4",
-    "ver_name": "GambleCoin",
-    "conf_name": "gamblecoin.conf",
-    "dir_name_linux": "gamblecoin",
-    "dir_name_mac": "GambleCoin",
-    "dir_name_win": "GambleCoin",
-    "repo_url": "https://github.com/GambleCoin-Project/GambleCoin",
-    "versions": [
-      "1.1.4"
-    ],
-    "xbridge_conf": "gamblecoin--1.1.4.conf",
-    "wallet_conf": "gamblecoin--1.1.4.conf"
-  },
-  {
     "blockchain": "GeekCash",
     "ticker": "GEEK",
     "ver_id": "geekcash--v1.3.0.1",
