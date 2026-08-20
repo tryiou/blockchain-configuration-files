@@ -160,7 +160,7 @@
   {
     "blockchain": "Digiwage",
     "ticker": "WAGE",
-    "ver_id": "digiwage--v1.1.0",
+    "ver_id": "digiwage--v2.0.1",
     "ver_name": "Digiwage",
     "conf_name": "digiwage.conf",
     "dir_name_linux": "digiwage",
@@ -168,10 +168,10 @@
     "dir_name_win": "Digiwage",
     "repo_url": "https://github.com/digiwage/digiwage",
     "versions": [
-      "1.2.1"
+      "v2.0.1"
     ],
-    "xbridge_conf": "digiwage--v1.1.0.conf",
-    "wallet_conf": "digiwage--v1.1.0.conf"
+    "xbridge_conf": "digiwage--v2.0.1.conf",
+    "wallet_conf": "digiwage--v2.0.1.conf"
   },
   {
     "blockchain": "Divi",
