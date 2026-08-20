@@ -242,22 +242,6 @@
     "wallet_conf": "emercoin--v0.8.5emc.conf"
   },
   {
-    "blockchain": "Eternity",
-    "ticker": "ENT",
-    "ver_id": "eternity--v0.12.1.7",
-    "ver_name": "Eternity",
-    "conf_name": "eternity.conf",
-    "dir_name_linux": "eternitycore",
-    "dir_name_mac": "EternityCore",
-    "dir_name_win": "EternityCore",
-    "repo_url": "https://github.com/eternity-group/eternity",
-    "versions": [
-      "v0.12.1.7"
-    ],
-    "xbridge_conf": "eternity--v0.12.1.7.conf",
-    "wallet_conf": "eternity--v0.12.1.7.conf"
-  },
-  {
     "blockchain": "eXperience Points",
     "ticker": "XP",
     "ver_id": "experiencepoints--v3.4.0.3",
