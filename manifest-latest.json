@@ -290,22 +290,6 @@
     "wallet_conf": "ixcoin--v0.14.1.conf"
   },
   {
-    "blockchain": "Kreds",
-    "ticker": "KREDS",
-    "ver_id": "kreds--v1.0.0.5.1",
-    "ver_name": "Kreds",
-    "conf_name": "kreds.conf",
-    "dir_name_linux": "kreds",
-    "dir_name_mac": "kreds",
-    "dir_name_win": "kreds",
-    "repo_url": "https://github.com/KredsBlockchain/kreds-core",
-    "versions": [
-      "v1.0.0.6"
-    ],
-    "xbridge_conf": "kreds--v1.0.0.5.1.conf",
-    "wallet_conf": "kreds--v1.0.0.5.1.conf"
-  },
-  {
     "blockchain": "KZCash",
     "ticker": "KZC",
     "ver_id": "kzcash--v0.1.9.1",
