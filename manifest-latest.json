@@ -274,22 +274,6 @@
     "wallet_conf": "goldcoin--v0.15.0.conf"
   },
   {
-    "blockchain": "HTMLCoin",
-    "ticker": "HTML",
-    "ver_id": "htmlcoin--v2.0.3.0",
-    "ver_name": "HTMLCoin",
-    "conf_name": "htmlcoin.conf",
-    "dir_name_linux": "htmlcoin",
-    "dir_name_mac": "HTMLCOIN",
-    "dir_name_win": "HTMLCOIN",
-    "repo_url": "https://github.com/HTMLCOIN/HTMLCOIN",
-    "versions": [
-      "v2.5.0"
-    ],
-    "xbridge_conf": "htmlcoin--v2.0.3.0.conf",
-    "wallet_conf": "htmlcoin--v2.0.3.0.conf"
-  },
-  {
     "blockchain": "Innova",
     "ticker": "INN",
     "ver_id": "innova--v4.3.8.6",
