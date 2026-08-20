@@ -260,7 +260,7 @@
   {
     "blockchain": "Goldcoin",
     "ticker": "GLC",
-    "ver_id": "goldcoin--0.14.7",
+    "ver_id": "goldcoin--v0.15.0",
     "ver_name": "GoldCoin",
     "conf_name": "goldcoin.conf",
     "dir_name_linux": "goldcoin",
@@ -268,10 +268,10 @@
     "dir_name_win": "Goldcoin",
     "repo_url": "https://github.com/goldcoin/goldcoin",
     "versions": [
-      "v0.14.7"
+      "v0.15.0"
     ],
-    "xbridge_conf": "goldcoin--v0.14.7.conf",
-    "wallet_conf": "goldcoin--v0.14.7.conf"
+    "xbridge_conf": "goldcoin--v0.15.0.conf",
+    "wallet_conf": "goldcoin--v0.15.0.conf"
   },
   {
     "blockchain": "GravityCoin",
