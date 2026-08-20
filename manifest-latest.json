@@ -244,7 +244,7 @@
   {
     "blockchain": "FujiCoin",
     "ticker": "FJC",
-    "ver_id": "fujicoin--fujicoin-v0.16.1",
+    "ver_id": "fujicoin--v30.0",
     "ver_name": "FujiCoin",
     "conf_name": "fujicoin.conf",
     "dir_name_linux": "fujicoin",
@@ -252,10 +252,10 @@
     "dir_name_win": "Fujicoin",
     "repo_url": "https://github.com/fujicoin/fujicoin",
     "versions": [
-      "fujicoin-v0.18.0"
+      "v30.0"
     ],
-    "xbridge_conf": "fujicoin--fujicoin-v0.16.1.conf",
-    "wallet_conf": "fujicoin--fujicoin-v0.16.1.conf"
+    "xbridge_conf": "fujicoin--v30.0.conf",
+    "wallet_conf": "fujicoin--v30.0.conf"
   },
   {
     "blockchain": "Galactrum",
