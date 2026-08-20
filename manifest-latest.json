@@ -290,22 +290,6 @@
     "wallet_conf": "ixcoin--v0.14.1.conf"
   },
   {
-    "blockchain": "KZCash",
-    "ticker": "KZC",
-    "ver_id": "kzcash--v0.1.9.1",
-    "ver_name": "KZCash",
-    "conf_name": "kzcash.conf",
-    "dir_name_linux": "kzcash",
-    "dir_name_mac": "KZCash",
-    "dir_name_win": "KZCash",
-    "repo_url": "https://github.com/kzcashteam/kzcash",
-    "versions": [
-      "v0.1.9.1"
-    ],
-    "xbridge_conf": "kzcash--v0.1.9.1.conf",
-    "wallet_conf": "kzcash--v0.1.9.1.conf"
-  },
-  {
     "blockchain": "LBRY Credits",
     "ticker": "LBC",
     "ver_id": "lbrycrd--v0.17.2.0",
