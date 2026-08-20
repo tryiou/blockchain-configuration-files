@@ -290,22 +290,6 @@
     "wallet_conf": "ixcoin--v0.14.1.conf"
   },
   {
-    "blockchain": "Kalkulus",
-    "ticker": "KLKS",
-    "ver_id": "klks--v2.6.0",
-    "ver_name": "Kalkulus",
-    "conf_name": "klks.conf",
-    "dir_name_linux": "klks",
-    "dir_name_mac": "klks",
-    "dir_name_win": "klks",
-    "repo_url": "https://github.com/kalkulusteam/klks",
-    "versions": [
-      "v2.8.0"
-    ],
-    "xbridge_conf": "klks--v2.6.0.conf",
-    "wallet_conf": "klks--v2.6.0.conf"
-  },
-  {
     "blockchain": "Know Your Developer",
     "ticker": "KYDC",
     "ver_id": "kyd--v3.2.0.3",
