@@ -242,22 +242,6 @@
     "wallet_conf": "emercoin--v0.8.5emc.conf"
   },
   {
-    "blockchain": "Faircoin",
-    "ticker": "FAIR",
-    "ver_id": "faircoin--v2.0.0",
-    "ver_name": "Faircoin",
-    "conf_name": "faircoin.conf",
-    "dir_name_linux": "faircoin2",
-    "dir_name_mac": "faircoin2",
-    "dir_name_win": "faircoin2",
-    "repo_url": "https://github.com/faircoin/faircoin",
-    "versions": [
-      "v2.0.1"
-    ],
-    "xbridge_conf": "faircoin--v2.0.0.conf",
-    "wallet_conf": "faircoin--v2.0.0.conf"
-  },
-  {
     "blockchain": "FantasyGold",
     "ticker": "FGC",
     "ver_id": "fantasygold--2.0.0",
