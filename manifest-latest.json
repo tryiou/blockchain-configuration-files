@@ -226,22 +226,6 @@
     "wallet_conf": "dogecoin--v1.14.9.conf"
   },
   {
-    "blockchain": "Einsteinium",
-    "ticker": "EMC2",
-    "ver_id": "einsteinium--v0.13.48.0",
-    "ver_name": "Einsteinium",
-    "conf_name": "einsteinium.conf",
-    "dir_name_linux": "einsteinium",
-    "dir_name_mac": "Einsteinium",
-    "dir_name_win": "Einsteinium",
-    "repo_url": "https://github.com/emc2foundation/einsteinium",
-    "versions": [
-      "v0.13.5.0"
-    ],
-    "xbridge_conf": "einsteinium--v0.13.48.0.conf",
-    "wallet_conf": "einsteinium--v0.13.48.0.conf"
-  },
-  {
     "blockchain": "Electra",
     "ticker": "ECA",
     "ver_id": "Electra--2.0.2.1",
