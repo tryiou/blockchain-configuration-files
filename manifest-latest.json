@@ -274,22 +274,6 @@
     "wallet_conf": "goldcoin--v0.15.0.conf"
   },
   {
-    "blockchain": "HASH",
-    "ticker": "HASH",
-    "ver_id": "hash--v1.4.0",
-    "ver_name": "HASH",
-    "conf_name": "hash.conf",
-    "dir_name_linux": "hash",
-    "dir_name_mac": "Hash",
-    "dir_name_win": "Hash",
-    "repo_url": "https://github.com/hashplatform/hash",
-    "versions": [
-      "v1.5.1"
-    ],
-    "xbridge_conf": "hash--v1.4.0.conf",
-    "wallet_conf": "hash--v1.4.0.conf"
-  },
-  {
     "blockchain": "Hatch",
     "ticker": "HATCH",
     "ver_id": "hatch--v0.14.0.3",
