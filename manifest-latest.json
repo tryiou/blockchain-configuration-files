@@ -226,23 +226,6 @@
     "wallet_conf": "dogecoin--v1.14.9.conf"
   },
   {
-    "blockchain": "Electra",
-    "ticker": "ECA",
-    "ver_id": "Electra--2.0.2.1",
-    "ver_name": "Electra",
-    "conf_name": "Electra.conf",
-    "dir_name_linux": "electra",
-    "dir_name_mac": "Electra",
-    "dir_name_win": "Electra",
-    "repo_url": "https://github.com/Electra-project/electra-core",
-    "versions": [
-      "2.1.1",
-      "2.1.2"
-    ],
-    "xbridge_conf": "electra--2.0.2.1.conf",
-    "wallet_conf": "electra--2.0.2.1.conf"
-  },
-  {
     "blockchain": "Emercoin",
     "ticker": "EMC",
     "ver_id": "emercoin--v0.7.10emc",
