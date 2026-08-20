@@ -242,22 +242,6 @@
     "wallet_conf": "emercoin--v0.8.5emc.conf"
   },
   {
-    "blockchain": "eXperience Points",
-    "ticker": "XP",
-    "ver_id": "experiencepoints--v3.4.0.3",
-    "ver_name": "eXperience Points",
-    "conf_name": "eXperiencePoints.conf",
-    "dir_name_linux": "eXperiencePoints",
-    "dir_name_mac": "eXperiencePoints",
-    "dir_name_win": "eXperiencePoints",
-    "repo_url": "https://github.com/experience-points-development/eXperience-Points",
-    "versions": [
-      "v3.4.0.3"
-    ],
-    "xbridge_conf": "experiencepoints--v3.4.0.3.conf",
-    "wallet_conf": "experiencepoints--v3.4.0.3.conf"
-  },
-  {
     "blockchain": "Faircoin",
     "ticker": "FAIR",
     "ver_id": "faircoin--v2.0.0",
