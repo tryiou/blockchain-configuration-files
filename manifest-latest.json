@@ -274,22 +274,6 @@
     "wallet_conf": "goldcoin--v0.15.0.conf"
   },
   {
-    "blockchain": "Helium",
-    "ticker": "HLM",
-    "ver_id": "helium--v0.16.0",
-    "ver_name": "Helium",
-    "conf_name": "helium.conf",
-    "dir_name_linux": "helium",
-    "dir_name_mac": "Helium",
-    "dir_name_win": "Helium",
-    "repo_url": "https://github.com/heliumchain/helium",
-    "versions": [
-      "v0.16.0"
-    ],
-    "xbridge_conf": "helium--v0.16.0.conf",
-    "wallet_conf": "helium--v0.16.0.conf"
-  },
-  {
     "blockchain": "HTMLCoin",
     "ticker": "HTML",
     "ver_id": "htmlcoin--v2.0.3.0",
