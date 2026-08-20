@@ -258,22 +258,6 @@
     "wallet_conf": "fujicoin--v30.0.conf"
   },
   {
-    "blockchain": "GeekCash",
-    "ticker": "GEEK",
-    "ver_id": "geekcash--v1.3.0.1",
-    "ver_name": "GeekCash",
-    "conf_name": "geekcash.conf",
-    "dir_name_linux": "geekcash",
-    "dir_name_mac": "GeekCash",
-    "dir_name_win": "GeekCash",
-    "repo_url": "https://github.com/GeekCash/geek",
-    "versions": [
-      "v1.3.0.1"
-    ],
-    "xbridge_conf": "geekcash--v1.3.0.1.conf",
-    "wallet_conf": "geekcash--v1.3.0.1.conf"
-  },
-  {
     "blockchain": "GINcoin",
     "ticker": "GIN",
     "ver_id": "gincoin--1.1.0.0",
