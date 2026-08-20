@@ -258,22 +258,6 @@
     "wallet_conf": "fujicoin--v30.0.conf"
   },
   {
-    "blockchain": "Galactrum",
-    "ticker": "ORE",
-    "ver_id": "galactrum--v1.1.6",
-    "ver_name": "Galactrum",
-    "conf_name": "galactrum.conf",
-    "dir_name_linux": "galactrum",
-    "dir_name_mac": "Galactrum",
-    "dir_name_win": "Galactrum",
-    "repo_url": "https://github.com/galactrum/galactrum",
-    "versions": [
-      "v1.4.0"
-    ],
-    "xbridge_conf": "galactrum--v1.1.6.conf",
-    "wallet_conf": "galactrum--v1.4.0.conf"
-  },
-  {
     "blockchain": "Galilel",
     "ticker": "GALI",
     "ver_id": "galilel--v3.2.0",
