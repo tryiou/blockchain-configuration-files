@@ -228,7 +228,7 @@
   {
     "blockchain": "Emercoin",
     "ticker": "EMC",
-    "ver_id": "emercoin--v0.7.10emc",
+    "ver_id": "emercoin--v0.8.5emc",
     "ver_name": "Emercoin",
     "conf_name": "emercoin.conf",
     "dir_name_linux": "emercoin",
@@ -236,10 +236,10 @@
     "dir_name_win": "Emercoin",
     "repo_url": "https://github.com/emercoin/emercoin",
     "versions": [
-      "v0.7.10emc"
+      "v0.8.5emc"
     ],
-    "xbridge_conf": "emercoin--v0.7.10emc.conf",
-    "wallet_conf": "emercoin--v0.7.10emc.conf"
+    "xbridge_conf": "emercoin--v0.8.5emc.conf",
+    "wallet_conf": "emercoin--v0.8.5emc.conf"
   },
   {
     "blockchain": "Eternity",
