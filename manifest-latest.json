@@ -258,22 +258,6 @@
     "wallet_conf": "fujicoin--v30.0.conf"
   },
   {
-    "blockchain": "Galilel",
-    "ticker": "GALI",
-    "ver_id": "galilel--v3.2.0",
-    "ver_name": "Galilel",
-    "conf_name": "galilel.conf",
-    "dir_name_linux": "galilel",
-    "dir_name_mac": "Galilel",
-    "dir_name_win": "Galilel",
-    "repo_url": "https://github.com/Galilel-Project/galilel",
-    "versions": [
-      "v3.4.0"
-    ],
-    "xbridge_conf": "galilel--v3.2.0.conf",
-    "wallet_conf": "galilel--v3.2.0.conf"
-  },
-  {
     "blockchain": "GambleCoin",
     "ticker": "GMCN",
     "ver_id": "gamblecoin--1.1.4",
