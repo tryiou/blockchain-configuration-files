@@ -242,23 +242,6 @@
     "wallet_conf": "emercoin--v0.8.5emc.conf"
   },
   {
-    "blockchain": "Flo",
-    "ticker": "FLO",
-    "ver_id": "flo--v0.15.0.3",
-    "ver_name": "Flo",
-    "conf_name": "flo.conf",
-    "dir_name_linux": "flo",
-    "dir_name_mac": "FLO",
-    "dir_name_win": "FLO",
-    "repo_url": "https://github.com/floblockchain/flo",
-    "versions": [
-      "v0.15.2.0",
-      "v0.15.2.1"
-    ],
-    "xbridge_conf": "flo--v0.15.0.3.conf",
-    "wallet_conf": "flo--v0.15.2.1.conf"
-  },
-  {
     "blockchain": "FujiCoin",
     "ticker": "FJC",
     "ver_id": "fujicoin--fujicoin-v0.16.1",
