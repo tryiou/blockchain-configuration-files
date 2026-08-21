@@ -334,7 +334,7 @@
   {
     "blockchain": "Lynx",
     "ticker": "LYNX",
-    "ver_id": "lynx--v0.15.1.0",
+    "ver_id": "lynx--v28.0.0",
     "ver_name": "Lynx",
     "conf_name": "lynx.conf",
     "dir_name_linux": "lynx",
@@ -342,10 +342,10 @@
     "dir_name_win": "Lynx",
     "repo_url": "https://github.com/getlynx/Lynx",
     "versions": [
-      "v0.16.3.9"
+      "v28.0.0"
     ],
-    "xbridge_conf": "lynx--v0.15.1.0.conf",
-    "wallet_conf": "lynx--v0.15.1.0.conf"
+    "xbridge_conf": "lynx--v28.0.0.conf",
+    "wallet_conf": "lynx--v28.0.0.conf"
   },
   {
     "blockchain": "Machinecoin",
