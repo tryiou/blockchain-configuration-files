@@ -292,22 +292,20 @@
   {
     "blockchain": "LBRY Credits",
     "ticker": "LBC",
-    "ver_id": "lbrycrd--v0.17.2.0",
+    "ver_id": "lbcd--v0.22.120",
     "ver_name": "LBRY Credits",
-    "conf_name": "lbrycrd.conf",
-    "dir_name_linux": "lbrycrd",
-    "dir_name_mac": "lbrycrd",
-    "dir_name_win": "lbrycrd",
-    "repo_url": "https://github.com/lbryio/lbrycrd",
+    "conf_name": "lbcd.conf",
+    "dir_name_linux": "lbcd",
+    "dir_name_mac": "lbcd",
+    "dir_name_win": "lbcd",
+    "daemon_stem": "lbc",
+    "daemon_family": "btcd",
+    "repo_url": "https://github.com/LBRYFoundation/lbcd",
     "versions": [
-      "v0.17.3.1",
-      "v0.17.3.2",
-      "v0.17.3.3",
-      "v0.17.4.5",
-      "v0.17.4.6"
+      "v0.22.120"
     ],
-    "xbridge_conf": "lbrycrd--v0.12.2.1.conf",
-    "wallet_conf": "lbrycrd--v0.17.2.0.conf"
+    "xbridge_conf": "lbcd--v0.22.120.conf",
+    "wallet_conf": "lbcd--v0.22.120.conf"
   },
   {
     "blockchain": "Litecoin",

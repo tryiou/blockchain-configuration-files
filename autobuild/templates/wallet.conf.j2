@@ -1,9 +1,17 @@
+{% if daemon_family is not defined or daemon_family != 'btcd' %}
 server=1
 listen=1
+{% endif %}
 rpcuser=
+{% if daemon_family is defined and daemon_family == 'btcd' %}
+rpcpass=
+{% else %}
 rpcpassword=
-{% if testnet is not defined %} 
+{% endif %}
+{% if testnet is not defined %}
+{% if daemon_family is not defined or daemon_family != 'btcd' %}
 rpcallowip=0.0.0.0/0
+{% endif %}
 port={{ p2pPort }}
 rpcport={{ rpcPort }}
 {% elif testnet is sameas true %}
@@ -52,7 +60,9 @@ rpcserialversion={{ rpcserialversion }}
 
 {% if testnet is defined and testnet is sameas true %}
 [test]
+{% if daemon_family is not defined or daemon_family != 'btcd' %}
 rpcallowip=0.0.0.0/0
+{% endif %}
 port={{ p2pPort }}
 rpcport={{ rpcPort }}
 {% endif %}
