@@ -348,23 +348,6 @@
     "wallet_conf": "lynx--v28.0.0.conf"
   },
   {
-    "blockchain": "Machinecoin",
-    "ticker": "MAC",
-    "ver_id": "machinecoin--v0.16.1.4",
-    "ver_name": "Machinecoin",
-    "conf_name": "machinecoin.conf",
-    "dir_name_linux": "machinecoin",
-    "dir_name_mac": "Machinecoin",
-    "dir_name_win": "Machinecoin",
-    "repo_url": "https://github.com/machinecoin-project/machinecoin-core",
-    "versions": [
-      "v0.16.3",
-      "v0.17.1"
-    ],
-    "xbridge_conf": "machinecoin--v0.16.1.4.conf",
-    "wallet_conf": "machinecoin--v0.16.1.4.conf"
-  },
-  {
     "blockchain": "Metrix",
     "ticker": "MRX",
     "ver_id": "Metrix--v4.0.3",
