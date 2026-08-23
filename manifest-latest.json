@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "Nodium",
-    "ticker": "XN",
-    "ver_id": "nodium--3.0.6",
-    "ver_name": "Nodium",
-    "conf_name": "nodium.conf",
-    "dir_name_linux": "Nodium",
-    "dir_name_mac": "Nodium",
-    "dir_name_win": "Nodium",
-    "repo_url": "https://github.com/nodiumproject/zNodium",
-    "versions": [
-      "3.0.6"
-    ],
-    "xbridge_conf": "nodium--3.0.6.conf",
-    "wallet_conf": "nodium--3.0.6.conf"
-  },
-  {
     "blockchain": "Noir",
     "ticker": "NOR",
     "ver_id": "noir--v1.0.0.2",
