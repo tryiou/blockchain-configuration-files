@@ -380,22 +380,6 @@
     "wallet_conf": "monacoin--v0.20.4.conf"
   },
   {
-    "blockchain": "Monoeci",
-    "ticker": "XMCC",
-    "ver_id": "monoeci--v0.12.2.3",
-    "ver_name": "Monoeci",
-    "conf_name": "monoeci.conf",
-    "dir_name_linux": "monoeciCore",
-    "dir_name_mac": "monoeciCore",
-    "dir_name_win": "monoeciCore",
-    "repo_url": "https://github.com/monacocoin-net/monoeci-core",
-    "versions": [
-      "v0.12.2.3"
-    ],
-    "xbridge_conf": "monoeci--v0.12.2.3.conf",
-    "wallet_conf": "monoeci--v0.12.2.3.conf"
-  },
-  {
     "blockchain": "Myriad",
     "ticker": "XMY",
     "ver_id": "myriadcoin--v0.16.3.0",
