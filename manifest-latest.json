@@ -364,22 +364,6 @@
     "wallet_conf": "Metrix--v4.2.0.1.conf"
   },
   {
-    "blockchain": "MNPCoin",
-    "ticker": "MNP",
-    "ver_id": "mnpcoin--v1.2.5",
-    "ver_name": "MNPCoin",
-    "conf_name": "mnpcoin.conf",
-    "dir_name_linux": "mnpcoin",
-    "dir_name_mac": "MNPCOIN",
-    "dir_name_win": "MNPCOIN",
-    "repo_url": "https://github.com/MasterNodesPro/MNPCoin",
-    "versions": [
-      "v1.2.5"
-    ],
-    "xbridge_conf": "mnpcoin--v1.2.5.conf",
-    "wallet_conf": "mnpcoin--v1.2.5.conf"
-  },
-  {
     "blockchain": "MktCoin",
     "ticker": "MLM",
     "ver_id": "mktcoin--0.14.3",
