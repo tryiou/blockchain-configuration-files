@@ -364,22 +364,6 @@
     "wallet_conf": "Metrix--v4.2.0.1.conf"
   },
   {
-    "blockchain": "MktCoin",
-    "ticker": "MLM",
-    "ver_id": "mktcoin--0.14.3",
-    "ver_name": "MktCoin",
-    "conf_name": "mktcoin.conf",
-    "dir_name_linux": "mktcoin",
-    "dir_name_mac": "MKTcoin",
-    "dir_name_win": "MKTcoin",
-    "repo_url": "https://github.com/Mktcoin-official/Mktcoin",
-    "versions": [
-      "0.15.0.3"
-    ],
-    "xbridge_conf": "mktcoin--0.14.3.conf",
-    "wallet_conf": "mktcoin--0.14.3.conf"
-  },
-  {
     "blockchain": "MonaCoin",
     "ticker": "MONA",
     "ver_id": "monacoin--monacoin-0.17.1",
