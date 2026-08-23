@@ -399,7 +399,7 @@
   {
     "blockchain": "Namecoin",
     "ticker": "NMC",
-    "ver_id": "namecoin--nc0.13.99-name-tab-beta1",
+    "ver_id": "namecoin--nc0.20.0",
     "ver_name": "Namecoin",
     "conf_name": "namecoin.conf",
     "dir_name_linux": "namecoin",
@@ -407,19 +407,10 @@
     "dir_name_win": "Namecoin",
     "repo_url": "https://github.com/namecoin/namecoin-core",
     "versions": [
-      "nc0.13.99-name-tab-beta1",
-      "nc0.16.1",
-      "nc0.16.2",
-      "nc0.17.0",
-      "nc0.18.0",
-      "nc0.18.1",
-      "nc0.19.0",
-      "nc0.19.0.1",
-      "nc0.19.1",
       "nc0.20.0"
     ],
-    "xbridge_conf": "namecoin--nc0.13.99-name-tab-beta1.conf",
-    "wallet_conf": "namecoin--nc0.13.99-name-tab-beta1.conf"
+    "xbridge_conf": "namecoin--nc0.20.0.conf",
+    "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
     "blockchain": "Nodium",
