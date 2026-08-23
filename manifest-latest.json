@@ -382,7 +382,7 @@
   {
     "blockchain": "Myriad",
     "ticker": "XMY",
-    "ver_id": "myriadcoin--v0.16.3.0",
+    "ver_id": "myriadcoin--v0.18.1.0",
     "ver_name": "Myriad",
     "conf_name": "myriadcoin.conf",
     "dir_name_linux": "myriadcoin",
@@ -393,8 +393,8 @@
       "v0.16.4.1",
       "v0.18.1.0"
     ],
-    "xbridge_conf": "myriadcoin--v0.14.2.5.conf",
-    "wallet_conf": "myriadcoin--v0.16.3.0.conf"
+    "xbridge_conf": "myriadcoin--v0.18.1.0.conf",
+    "wallet_conf": "myriadcoin--v0.18.1.0.conf"
   },
   {
     "blockchain": "Namecoin",
