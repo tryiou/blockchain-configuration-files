@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "Nyerium",
-    "ticker": "NYEX",
-    "ver_id": "nyerium--v1.0.3",
-    "ver_name": "Nyerium",
-    "conf_name": "nyerium.conf",
-    "dir_name_linux": "nyerium",
-    "dir_name_mac": "Nyerium",
-    "dir_name_win": "Nyerium",
-    "repo_url": "https://github.com/nyerium-core/nyerium",
-    "versions": [
-      "v1.0.3"
-    ],
-    "xbridge_conf": "nyerium--v1.0.3.conf",
-    "wallet_conf": "nyerium--v1.0.3.conf"
-  },
-  {
     "blockchain": "NyxCoin",
     "ticker": "NYX",
     "ver_id": "nyx--v2.0.0.0",
