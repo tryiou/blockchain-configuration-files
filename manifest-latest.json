@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "NyxCoin",
-    "ticker": "NYX",
-    "ver_id": "nyx--v2.0.0.0",
-    "ver_name": "NyxCoin",
-    "conf_name": "nyx.conf",
-    "dir_name_linux": "nyx",
-    "dir_name_mac": "Nyx",
-    "dir_name_win": "NYX",
-    "repo_url": "https://github.com/nyxpay/nyx",
-    "versions": [
-      "v2.0.0.0"
-    ],
-    "xbridge_conf": "nyx--v2.0.0.0.conf",
-    "wallet_conf": "nyx--v2.0.0.0.conf"
-  },
-  {
     "blockchain": "Odin",
     "ticker": "ODIN",
     "ver_id": "odin--v1.4.2",
