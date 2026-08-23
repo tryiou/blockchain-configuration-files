@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "PACGlobal",
-    "ticker": "PAC",
-    "ver_id": "pacglobal--v0.15-da839021c",
-    "ver_name": "PACGlobal",
-    "conf_name": "pacglobal.conf",
-    "dir_name_linux": "PACGlobal",
-    "dir_name_mac": "PACGlobal",
-    "dir_name_win": "PACGlobal",
-    "repo_url": "https://github.com/pacglobalofficial/pac",
-    "versions": [
-      "v0.15-da839021c"
-    ],
-    "xbridge_conf": "pacglobal--v0.15-da839021c.conf",
-    "wallet_conf": "pacglobal--v0.15-da839021c.conf"
-  },
-  {
     "blockchain": "Particl",
     "ticker": "PART",
     "ver_id": "particl--v0.19.2.5",
