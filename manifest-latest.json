@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "Noir",
-    "ticker": "NOR",
-    "ver_id": "noir--v1.0.0.2",
-    "ver_name": "Noir",
-    "conf_name": "noir.conf",
-    "dir_name_linux": "noir",
-    "dir_name_mac": "noir",
-    "dir_name_win": "noir",
-    "repo_url": "https://github.com/noirofficial/noir",
-    "versions": [
-      "v2.1.0.9"
-    ],
-    "xbridge_conf": "noir--v1.0.0.2.conf",
-    "wallet_conf": "noir--v1.0.0.2.conf"
-  },
-  {
     "blockchain": "Northern",
     "ticker": "NORT",
     "ver_id": "northern--1.0.0",
