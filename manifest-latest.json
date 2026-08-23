@@ -438,23 +438,6 @@
     "wallet_conf": "namecoin--nc0.13.99-name-tab-beta1.conf"
   },
   {
-    "blockchain": "Nix",
-    "ticker": "NIX",
-    "ver_id": "nix--v2.2.0",
-    "ver_name": "Nix",
-    "conf_name": "nix.conf",
-    "dir_name_linux": "nix",
-    "dir_name_mac": "nix",
-    "dir_name_win": "nix",
-    "repo_url": "https://github.com/NixPlatform/NixCore",
-    "versions": [
-      "v3.0.7",
-      "v3.0.8"
-    ],
-    "xbridge_conf": "nix--v2.0.3.conf",
-    "wallet_conf": "nix--v2.0.3.conf"
-  },
-  {
     "blockchain": "Nodium",
     "ticker": "XN",
     "ver_id": "nodium--3.0.6",
