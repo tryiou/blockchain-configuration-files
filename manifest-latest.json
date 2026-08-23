@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "OPCoinX",
-    "ticker": "OPCX",
-    "ver_id": "OPCoinX--v2.0.0",
-    "ver_name": "OPCoinX",
-    "conf_name": "OPCoinX.conf",
-    "dir_name_linux": "OPCoinX",
-    "dir_name_mac": "OPCoinX",
-    "dir_name_win": "OPCoinX",
-    "repo_url": "https://github.com/opcoinx/OPCoinX",
-    "versions": [
-      "v2.0.0"
-    ],
-    "xbridge_conf": "opcoinx--v2.0.0.conf",
-    "wallet_conf": "opcoinx--v2.0.0.conf"
-  },
-  {
     "blockchain": "PACGlobal",
     "ticker": "PAC",
     "ver_id": "pacglobal--v0.15-da839021c",
