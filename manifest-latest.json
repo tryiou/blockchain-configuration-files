@@ -380,22 +380,6 @@
     "wallet_conf": "monacoin--v0.20.4.conf"
   },
   {
-    "blockchain": "MonetaryUnit",
-    "ticker": "MUE",
-    "ver_id": "monetaryunit--v2.3.0",
-    "ver_name": "MonetaryUnit",
-    "conf_name": "monetaryunit.conf",
-    "dir_name_linux": "monetaryunit",
-    "dir_name_mac": "MonetaryUnitCore",
-    "dir_name_win": "MonetaryUnitCore",
-    "repo_url": "https://github.com/muecoin/MUE",
-    "versions": [
-      "v2.3.0"
-    ],
-    "xbridge_conf": "monetaryunit--v2.3.0.conf",
-    "wallet_conf": "monetaryunit--v2.3.0.conf"
-  },
-  {
     "blockchain": "Monoeci",
     "ticker": "XMCC",
     "ver_id": "monoeci--v0.12.2.3",
