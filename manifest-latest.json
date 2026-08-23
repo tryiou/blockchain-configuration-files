@@ -413,22 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "Ohmcoin",
-    "ticker": "OHMC",
-    "ver_id": "ohmc--2.3.1",
-    "ver_name": "Ohmcoin",
-    "conf_name": "ohmc.conf",
-    "dir_name_linux": "ohmc",
-    "dir_name_mac": "OHMC",
-    "dir_name_win": "OHMC",
-    "repo_url": "https://github.com/theohmproject/OhmCoin",
-    "versions": [
-      "2.4.0.0"
-    ],
-    "xbridge_conf": "ohmc--2.3.1.conf",
-    "wallet_conf": "ohmc--2.3.1.conf"
-  },
-  {
     "blockchain": "OPCoinX",
     "ticker": "OPCX",
     "ver_id": "OPCoinX--v2.0.0",
