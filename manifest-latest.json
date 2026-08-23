@@ -413,23 +413,6 @@
     "wallet_conf": "namecoin--nc0.20.0.conf"
   },
   {
-    "blockchain": "Northern",
-    "ticker": "NORT",
-    "ver_id": "northern--1.0.0",
-    "ver_name": "Northern",
-    "conf_name": "northern.conf",
-    "dir_name_linux": "northern",
-    "dir_name_mac": "Northern",
-    "dir_name_win": "Northern",
-    "repo_url": "https://github.com/northern-community/Northern",
-    "versions": [
-      "3.3.1",
-      "3.3.2"
-    ],
-    "xbridge_conf": "northern--1.0.0.conf",
-    "wallet_conf": "northern--1.0.0.conf"
-  },
-  {
     "blockchain": "Nyerium",
     "ticker": "NYEX",
     "ver_id": "nyerium--v1.0.3",
