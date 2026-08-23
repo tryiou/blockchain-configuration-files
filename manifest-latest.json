@@ -438,22 +438,6 @@
     "wallet_conf": "namecoin--nc0.13.99-name-tab-beta1.conf"
   },
   {
-    "blockchain": "NativeCoin",
-    "ticker": "N8V",
-    "ver_id": "nativecoin--v1.0.0",
-    "ver_name": "NativeCoin",
-    "conf_name": "nativecoin.conf",
-    "dir_name_linux": ".nativecoin",
-    "dir_name_mac": "nativecoin",
-    "dir_name_win": "NativeCoinCore",
-    "repo_url": "https://github.com/N8VCoin/nativecoin",
-    "versions": [
-      "1.2"
-    ],
-    "xbridge_conf": "nativecoin--v1.0.0.conf",
-    "wallet_conf": "nativecoin--v1.0.0.conf"
-  },
-  {
     "blockchain": "Nix",
     "ticker": "NIX",
     "ver_id": "nix--v2.2.0",
