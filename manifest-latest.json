@@ -464,7 +464,7 @@
   {
     "blockchain": "Qtum",
     "ticker": "QTUM",
-    "ver_id": "qtum--mainnet-ignition-v0.17.1",
+    "ver_id": "qtum--v29.1",
     "ver_name": "Qtum",
     "conf_name": "qtum.conf",
     "dir_name_linux": "qtum",
@@ -472,10 +472,11 @@
     "dir_name_win": "Qtum",
     "repo_url": "https://github.com/qtumproject/qtum",
     "versions": [
-      "mainnet-ignition-v0.19.1"
+      "v29.1",
+      "v30.2"
     ],
-    "xbridge_conf": "qtum--mainnet-ignition-v0.15.2.conf",
-    "wallet_conf": "qtum--mainnet-ignition-v0.17.1.conf"
+    "xbridge_conf": "qtum--v29.1.conf",
+    "wallet_conf": "qtum--v29.1.conf"
   },
   {
     "blockchain": "Rapids",
