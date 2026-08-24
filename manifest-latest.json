@@ -479,22 +479,6 @@
     "wallet_conf": "qtum--v29.1.conf"
   },
   {
-    "blockchain": "Rapture",
-    "ticker": "RAP",
-    "ver_id": "rapture--v1.1.2.2",
-    "ver_name": "Rapture",
-    "conf_name": "rapture.conf",
-    "dir_name_linux": "rapturecore",
-    "dir_name_mac": "RaptureCore",
-    "dir_name_win": "RaptureCore",
-    "repo_url": "https://github.com/RaptureCore/Rapture",
-    "versions": [
-      "v1.1.2.2"
-    ],
-    "xbridge_conf": "rapture--v1.1.2.2.conf",
-    "wallet_conf": "rapture--v1.1.2.2.conf"
-  },
-  {
     "blockchain": "Ravencoin",
     "ticker": "RVN",
     "ver_id": "raven--v4.1.0",
