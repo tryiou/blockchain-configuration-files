@@ -481,7 +481,7 @@
   {
     "blockchain": "Ravencoin",
     "ticker": "RVN",
-    "ver_id": "raven--v4.1.0",
+    "ver_id": "raven--v4.8.0",
     "ver_name": "Ravencoin",
     "conf_name": "raven.conf",
     "dir_name_linux": "raven",
@@ -489,17 +489,10 @@
     "dir_name_win": "Raven",
     "repo_url": "https://github.com/RavenProject/Ravencoin",
     "versions": [
-      "v4.1.0",
-      "v4.2.0",
-      "v4.2.1",
-      "v4.3.0",
-      "v4.3.1",
-      "v4.3.2",
-      "v4.3.2.1",
-      "v4.6.1"
+      "v4.8.0"
     ],
-    "xbridge_conf": "raven--v4.1.0.conf",
-    "wallet_conf": "raven--v4.1.0.conf"
+    "xbridge_conf": "raven--v4.8.0.conf",
+    "wallet_conf": "raven--v4.8.0.conf"
   },
   {
     "blockchain": "Reecore",
