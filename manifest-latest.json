@@ -495,23 +495,6 @@
     "wallet_conf": "raven--v4.8.0.conf"
   },
   {
-    "blockchain": "Social Send",
-    "ticker": "SEND",
-    "ver_id": "send--v1.1.0.0",
-    "ver_name": "Social Send",
-    "conf_name": "send.conf",
-    "dir_name_linux": "send",
-    "dir_name_mac": "SEND",
-    "dir_name_win": "SEND",
-    "repo_url": "https://github.com/SocialSend/SocialSend",
-    "versions": [
-      "1.2.0.5",
-      "v1.2.1.0"
-    ],
-    "xbridge_conf": "send--v1.1.0.0.conf",
-    "wallet_conf": "send--v1.1.0.0.conf"
-  },
-  {
     "blockchain": "SparksPay",
     "ticker": "SPK",
     "ver_id": "sparks--v0.21.1.1",
