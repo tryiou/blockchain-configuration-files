@@ -528,22 +528,6 @@
     "wallet_conf": "stakecubecoin--v3.5.1.0.conf"
   },
   {
-    "blockchain": "SUB1X",
-    "ticker": "SUB1X",
-    "ver_id": "zsub1x--1.4.0",
-    "ver_name": "SUB1X",
-    "conf_name": "zsub1x.conf",
-    "dir_name_linux": "zsub1x",
-    "dir_name_mac": "zSub1x",
-    "dir_name_win": "zSub1x",
-    "repo_url": "https://github.com/SuB1X-Coin/zSub1x",
-    "versions": [
-      "1.4.0"
-    ],
-    "xbridge_conf": "zsub1x--1.4.0.conf",
-    "wallet_conf": "zsub1x--1.4.0.conf"
-  },
-  {
     "blockchain": "SwiftCash",
     "ticker": "SWIFT",
     "ver_id": "swiftcash--3.0.5",
