@@ -479,22 +479,6 @@
     "wallet_conf": "qtum--v29.1.conf"
   },
   {
-    "blockchain": "Rapids",
-    "ticker": "RPD",
-    "ver_id": "rapids--v1.0.0.1",
-    "ver_name": "Rapids",
-    "conf_name": "rapids.conf",
-    "dir_name_linux": "rapids",
-    "dir_name_mac": "Rapids",
-    "dir_name_win": "Rapids",
-    "repo_url": "https://github.com/RapidsOfficial/Rapids",
-    "versions": [
-      "v2.0.0.0-b784ecbf4d"
-    ],
-    "xbridge_conf": "rapids--v1.0.0.1.conf",
-    "wallet_conf": "rapids--v1.0.0.1.conf"
-  },
-  {
     "blockchain": "Rapture",
     "ticker": "RAP",
     "ver_id": "rapture--v1.1.2.2",
