@@ -107,7 +107,7 @@ within your local repo/autobuild/utils directory, for example:
 ```
 mark@x230:~/src/blockdx-configs$ cd autobuild/utils
 mark@x230:~/src/blockdx-configs/autobuild/utils$ python3 create-j2-confs.py
- AGM,BCH,BLOCK,BTC,BTX,CDZC,CNMC,COLX,DASH,DGB,DIVI,DOGE,DOGEC,EMC,FJC,GLC,IOP,IXC,LBC,LTC,LUX,LYNX,MONA,MRX,NMC,PART,PIVX,POLIS,QTUM,RVN,SCC,SPK,STAK,SUB1X,SWIFT,SYS,TRB,TRC,UFO,UNO,VIA,VITAE,VIVO,VSX,VTC,WAGE,WGR,XC,XMY,XVG,XZC,ZNZ
+ AGM,BCH,BLOCK,BTC,BTX,CDZC,CNMC,COLX,DASH,DGB,DIVI,DOGE,DOGEC,EMC,FJC,GLC,IOP,IXC,LBC,LTC,LUX,LYNX,MONA,MRX,NMC,PART,PIVX,POLIS,QTUM,RVN,SCC,SPK,SUB1X,SWIFT,SYS,TRB,TRC,UFO,UNO,VIA,VITAE,VIVO,VSX,VTC,WAGE,WGR,XC,XMY,XVG,XZC,ZNZ
 mark@x230:~/src/blockdx-configs/autobuild/utils$ python3 create-j2-confs.py --coins SYS
 ```
 

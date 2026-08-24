@@ -528,22 +528,6 @@
     "wallet_conf": "stakecubecoin--v3.5.1.0.conf"
   },
   {
-    "blockchain": "STRAKS",
-    "ticker": "STAK",
-    "ver_id": "straks--1.14.7.3",
-    "ver_name": "STRAKS",
-    "conf_name": "straks.conf",
-    "dir_name_linux": "straks",
-    "dir_name_mac": "straks",
-    "dir_name_win": "straks",
-    "repo_url": "https://github.com/straks/straks",
-    "versions": [
-      "1.14.7.5"
-    ],
-    "xbridge_conf": "straks--1.14.7.3.conf",
-    "wallet_conf": "straks--1.14.7.3.conf"
-  },
-  {
     "blockchain": "SUB1X",
     "ticker": "SUB1X",
     "ver_id": "zsub1x--1.4.0",
