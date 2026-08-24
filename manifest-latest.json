@@ -514,7 +514,7 @@
   {
     "blockchain": "SparksPay",
     "ticker": "SPK",
-    "ver_id": "sparks--v0.12.3.2",
+    "ver_id": "sparks--v0.21.1.1",
     "ver_name": "Sparks",
     "conf_name": "sparks.conf",
     "dir_name_linux": "sparkscore",
@@ -522,10 +522,10 @@
     "dir_name_win": "SparksCore",
     "repo_url": "https://github.com/sparkspay/sparks",
     "versions": [
-      "v0.12.4.3"
+      "v0.21.1.1"
     ],
-    "xbridge_conf": "sparks--v0.12.3.2.conf",
-    "wallet_conf": "sparks--v0.12.3.2.conf"
+    "xbridge_conf": "sparks--v0.21.1.1.conf",
+    "wallet_conf": "sparks--v0.21.1.1.conf"
   },
   {
     "blockchain": "StakeCubeCoin",
