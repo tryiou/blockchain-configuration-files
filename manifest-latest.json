@@ -495,23 +495,6 @@
     "wallet_conf": "raven--v4.8.0.conf"
   },
   {
-    "blockchain": "Secure Cloud Net",
-    "ticker": "SCN",
-    "ver_id": "securecloud--v2.4.3",
-    "ver_name": "Secure Cloud Net",
-    "conf_name": "securecloud.conf",
-    "dir_name_linux": "securecloud",
-    "dir_name_mac": "SecureCloud",
-    "dir_name_win": "SecureCloud",
-    "repo_url": "https://github.com/securecloudnet/SecureCloud",
-    "versions": [
-      "v2.5.1.1",
-      "v2.5.1.2"
-    ],
-    "xbridge_conf": "securecloud--v2.4.3.conf",
-    "wallet_conf": "securecloud--v2.4.3.conf"
-  },
-  {
     "blockchain": "Sequence",
     "ticker": "SEQ",
     "ver_id": "sequence--v1.3.0.0",
