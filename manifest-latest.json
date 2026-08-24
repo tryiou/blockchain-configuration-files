@@ -2,7 +2,7 @@
   {
     "blockchain": "Argoneum",
     "ticker": "AGM",
-    "ver_id": "argoneum--v1.2.3.4",
+    "ver_id": "argoneum--v1.4.0.0",
     "ver_name": "Argoneum",
     "conf_name": "argoneum.conf",
     "dir_name_linux": "argoneum",
@@ -13,8 +13,8 @@
       "v1.4.0.0",
       "v1.4.1.0"
     ],
-    "xbridge_conf": "argoneum--v1.2.3.4.conf",
-    "wallet_conf": "argoneum--v1.2.3.4.conf"
+    "xbridge_conf": "argoneum--v1.4.0.0.conf",
+    "wallet_conf": "argoneum--v1.4.0.0.conf"
   },
   {
     "blockchain": "Bitcoin",
@@ -51,7 +51,7 @@
   {
     "blockchain": "BitCore",
     "ticker": "BTX",
-    "ver_id": "bitcore--0.90.8.8.1",
+    "ver_id": "bitcore--0.90.9.10",
     "ver_name": "BitCore 0.90.x",
     "conf_name": "bitcore.conf",
     "dir_name_linux": "bitcore",
@@ -61,8 +61,8 @@
     "versions": [
       "0.90.9.10"
     ],
-    "xbridge_conf": "bitcore--0.15.2.0.0.conf",
-    "wallet_conf": "bitcore--0.90.8.8.1.conf"
+    "xbridge_conf": "bitcore--0.90.9.10.conf",
+    "wallet_conf": "bitcore--0.90.9.10.conf"
   },
   {
     "blockchain": "Blocknet",
@@ -208,7 +208,7 @@
   {
     "blockchain": "Dogecoin",
     "ticker": "DOGE",
-    "ver_id": "dogecoin--v1.14.9",
+    "ver_id": "dogecoin--v1.14.5",
     "ver_name": "Dogecoin",
     "conf_name": "dogecoin.conf",
     "dir_name_linux": "dogecoin",
@@ -222,8 +222,8 @@
       "v1.14.8",
       "v1.14.9"
     ],
-    "xbridge_conf": "dogecoin--v1.14.9.conf",
-    "wallet_conf": "dogecoin--v1.14.9.conf"
+    "xbridge_conf": "dogecoin--v1.14.5.conf",
+    "wallet_conf": "dogecoin--v1.14.5.conf"
   },
   {
     "blockchain": "Emercoin",
@@ -382,7 +382,7 @@
   {
     "blockchain": "Myriad",
     "ticker": "XMY",
-    "ver_id": "myriadcoin--v0.18.1.0",
+    "ver_id": "myriadcoin--v0.16.4.1",
     "ver_name": "Myriad",
     "conf_name": "myriadcoin.conf",
     "dir_name_linux": "myriadcoin",
@@ -393,8 +393,8 @@
       "v0.16.4.1",
       "v0.18.1.0"
     ],
-    "xbridge_conf": "myriadcoin--v0.18.1.0.conf",
-    "wallet_conf": "myriadcoin--v0.18.1.0.conf"
+    "xbridge_conf": "myriadcoin--v0.16.4.1.conf",
+    "wallet_conf": "myriadcoin--v0.16.4.1.conf"
   },
   {
     "blockchain": "Namecoin",
