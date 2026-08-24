@@ -462,22 +462,6 @@
     "wallet_conf": "pkoin--0.22.20.conf"
   },
   {
-    "blockchain": "Qbic",
-    "ticker": "QBIC",
-    "ver_id": "qbiccoin--v1.0.1.0",
-    "ver_name": "Qbic",
-    "conf_name": "qbiccoin.conf",
-    "dir_name_linux": "qbiccoin",
-    "dir_name_mac": "QBICcoin",
-    "dir_name_win": "QBICcoin",
-    "repo_url": "https://github.com/qbic-platform/qbic_v2.0",
-    "versions": [
-      "v1.1"
-    ],
-    "xbridge_conf": "qbiccoin--v1.0.1.0.conf",
-    "wallet_conf": "qbiccoin--v1.0.1.0.conf"
-  },
-  {
     "blockchain": "Qtum",
     "ticker": "QTUM",
     "ver_id": "qtum--mainnet-ignition-v0.17.1",
