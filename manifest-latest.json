@@ -495,22 +495,6 @@
     "wallet_conf": "raven--v4.8.0.conf"
   },
   {
-    "blockchain": "Reecore",
-    "ticker": "REEX",
-    "ver_id": "Reecore--v1.4.2.2",
-    "ver_name": "Reecore",
-    "conf_name": "Reecore.conf",
-    "dir_name_linux": "Reecore",
-    "dir_name_mac": "Reecore",
-    "dir_name_win": "Reecore",
-    "repo_url": "https://github.com/reecore-coin/Reex",
-    "versions": [
-      "v1.4.2.2"
-    ],
-    "xbridge_conf": "reecore--v1.4.2.2.conf",
-    "wallet_conf": "reecore--v1.4.2.2.conf"
-  },
-  {
     "blockchain": "Scribe",
     "ticker": "SCRIBE",
     "ver_id": "scribe--v0.2",
