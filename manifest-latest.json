@@ -462,22 +462,6 @@
     "wallet_conf": "pkoin--0.22.20.conf"
   },
   {
-    "blockchain": "Pura",
-    "ticker": "PURA",
-    "ver_id": "pura--v1.0.0.0",
-    "ver_name": "Pura",
-    "conf_name": "pura.conf",
-    "dir_name_linux": "pura",
-    "dir_name_mac": "Pura",
-    "dir_name_win": "Pura",
-    "repo_url": "https://github.com/puracore/pura",
-    "versions": [
-      "v1.3.7"
-    ],
-    "xbridge_conf": "pura--v1.0.0.0.conf",
-    "wallet_conf": "pura--v1.0.0.0.conf"
-  },
-  {
     "blockchain": "Qbic",
     "ticker": "QBIC",
     "ver_id": "qbiccoin--v1.0.1.0",
