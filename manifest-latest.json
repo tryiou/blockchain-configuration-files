@@ -495,22 +495,6 @@
     "wallet_conf": "raven--v4.8.0.conf"
   },
   {
-    "blockchain": "Shekel",
-    "ticker": "JEW",
-    "ver_id": "shekel--1.4.0",
-    "ver_name": "Shekel",
-    "conf_name": "shekel.conf",
-    "dir_name_linux": "shekel",
-    "dir_name_mac": "Shekel",
-    "dir_name_win": "Shekel",
-    "repo_url": "https://github.com/shekeltechnologies/JewNew",
-    "versions": [
-      "1.5.0"
-    ],
-    "xbridge_conf": "shekel--1.4.0.conf",
-    "wallet_conf": "shekel--1.4.0.conf"
-  },
-  {
     "blockchain": "Sibcoin",
     "ticker": "SIB",
     "ver_id": "sibcoin--v0.16.1.3",
