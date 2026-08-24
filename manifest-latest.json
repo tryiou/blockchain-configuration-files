@@ -495,22 +495,6 @@
     "wallet_conf": "raven--v4.8.0.conf"
   },
   {
-    "blockchain": "Scribe",
-    "ticker": "SCRIBE",
-    "ver_id": "scribe--v0.2",
-    "ver_name": "Scribe",
-    "conf_name": "scribe.conf",
-    "dir_name_linux": "scribecore",
-    "dir_name_mac": "ScribeCore",
-    "dir_name_win": "ScribeCore",
-    "repo_url": "https://github.com/scribenetwork/scribe",
-    "versions": [
-      "v0.2"
-    ],
-    "xbridge_conf": "scribe--v0.2.conf",
-    "wallet_conf": "scribe--v0.2.conf"
-  },
-  {
     "blockchain": "Secure Cloud Net",
     "ticker": "SCN",
     "ver_id": "securecloud--v2.4.3",
