@@ -657,23 +657,6 @@
     "wallet_conf": "viacoin--v30.2.0.conf"
   },
   {
-    "blockchain": "Vitae",
-    "ticker": "VITAE",
-    "ver_id": "vitae--v4.1.0.1",
-    "ver_name": "Vitae",
-    "conf_name": "vitae.conf",
-    "dir_name_linux": "vitae",
-    "dir_name_mac": "VITAE",
-    "dir_name_win": "VITAE",
-    "repo_url": "https://github.com/VitaeTeam/Vitae",
-    "versions": [
-      "v4.4.0.3",
-      "v4.4.2"
-    ],
-    "xbridge_conf": "vitae--v4.1.0.1.conf",
-    "wallet_conf": "vitae--v4.1.0.1.conf"
-  },
-  {
     "blockchain": "VIVO",
     "ticker": "VIVO",
     "ver_id": "vivo--v0.12.1.8",
