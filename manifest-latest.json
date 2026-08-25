@@ -659,7 +659,7 @@
   {
     "blockchain": "VIVO",
     "ticker": "VIVO",
-    "ver_id": "vivo--v0.12.1.8",
+    "ver_id": "vivo--v0.12.1.17",
     "ver_name": "VIVO",
     "conf_name": "vivo.conf",
     "dir_name_linux": "vivocore",
@@ -669,8 +669,8 @@
     "versions": [
       "v0.12.1.17"
     ],
-    "xbridge_conf": "vivo--v0.12.1.8.conf",
-    "wallet_conf": "vivo--v0.12.1.8.conf"
+    "xbridge_conf": "vivo--v0.12.1.17.conf",
+    "wallet_conf": "vivo--v0.12.1.17.conf"
   },
   {
     "blockchain": "Vsync",
