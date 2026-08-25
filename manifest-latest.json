@@ -578,7 +578,7 @@
   {
     "blockchain": "Terracoin",
     "ticker": "TRC",
-    "ver_id": "terracoin--v0.12.1.8",
+    "ver_id": "terracoin--v0.12.2.5",
     "ver_name": "Terracoin",
     "conf_name": "terracoin.conf",
     "dir_name_linux": "terracoincore",
@@ -586,11 +586,10 @@
     "dir_name_win": "TerracoinCore",
     "repo_url": "https://github.com/terracoin/terracoin",
     "versions": [
-      "v0.12.2.4",
       "v0.12.2.5"
     ],
-    "xbridge_conf": "terracoin--v0.12.1.8.conf",
-    "wallet_conf": "terracoin--v0.12.1.8.conf"
+    "xbridge_conf": "terracoin--v0.12.2.5.conf",
+    "wallet_conf": "terracoin--v0.12.2.5.conf"
   },
   {
     "blockchain": "Uniform Fiscal Object",
