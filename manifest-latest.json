@@ -594,7 +594,7 @@
   {
     "blockchain": "Uniform Fiscal Object",
     "ticker": "UFO",
-    "ver_id": "ufocoin--v0.17.0",
+    "ver_id": "ufocoin--v0.18.1",
     "ver_name": "Uniform Fiscal Object",
     "conf_name": "ufocoin.conf",
     "dir_name_linux": "ufo",
@@ -602,10 +602,11 @@
     "dir_name_win": "UFO",
     "repo_url": "https://github.com/fiscalobject/ufo",
     "versions": [
-      "v0.18.0"
+      "v0.18.1"
     ],
-    "xbridge_conf": "ufocoin--v0.16.1.conf",
-    "wallet_conf": "ufocoin--v0.18.0.conf"
+    "xbridge_conf": "ufocoin--v0.18.1.conf",
+    "wallet_conf": "ufocoin--v0.18.1.conf",
+    "daemon_stem": "ufo"
   },
   {
     "blockchain": "Unobtanium",
