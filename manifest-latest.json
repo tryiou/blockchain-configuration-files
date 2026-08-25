@@ -627,7 +627,7 @@
   {
     "blockchain": "Vertcoin",
     "ticker": "VTC",
-    "ver_id": "vertcoin--0.14.0",
+    "ver_id": "vertcoin--v23.2",
     "ver_name": "Vertcoin",
     "conf_name": "vertcoin.conf",
     "dir_name_linux": "vertcoin",
@@ -635,12 +635,10 @@
     "dir_name_win": "Vertcoin",
     "repo_url": "https://github.com/vertcoin-project/vertcoin-core",
     "versions": [
-      "0.14.0",
-      "0.15.0",
-      "0.15.0.1"
+      "v23.2"
     ],
-    "xbridge_conf": "vertcoin--0.12.0.conf",
-    "wallet_conf": "vertcoin--0.13.0.conf"
+    "xbridge_conf": "vertcoin--v23.2.conf",
+    "wallet_conf": "vertcoin--v23.2.conf"
   },
   {
     "blockchain": "Viacoin",
