@@ -593,22 +593,6 @@
     "wallet_conf": "terracoin--v0.12.1.8.conf"
   },
   {
-    "blockchain": "Tribe",
-    "ticker": "TRB",
-    "ver_id": "tribe--v1.0.0",
-    "ver_name": "Tribe",
-    "conf_name": "tribe.conf",
-    "dir_name_linux": "tribe",
-    "dir_name_mac": "tribe",
-    "dir_name_win": "tribe",
-    "repo_url": "https://github.com/TribeCrypto/tribe",
-    "versions": [
-      "1.0.2"
-    ],
-    "xbridge_conf": "tribe--v1.0.0.conf",
-    "wallet_conf": "tribe--v1.0.0.conf"
-  },
-  {
     "blockchain": "Uniform Fiscal Object",
     "ticker": "UFO",
     "ver_id": "ufocoin--v0.17.0",
