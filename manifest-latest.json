@@ -673,21 +673,21 @@
     "wallet_conf": "vivo--v0.12.1.17.conf"
   },
   {
-    "blockchain": "ZCoin",
-    "ticker": "XZC",
-    "ver_id": "zcoin--v0.13.6.4",
-    "ver_name": "ZCoin",
-    "conf_name": "zcoin.conf",
-    "dir_name_linux": "zcoin",
-    "dir_name_mac": "zcoin",
-    "dir_name_win": "zcoin",
-    "repo_url": "https://github.com/zcoinofficial/zcoin",
+    "blockchain": "Firo",
+    "ticker": "FIRO",
+    "ver_id": "firo--v0.14.17.2",
+    "ver_name": "Firo",
+    "conf_name": "firo.conf",
+    "dir_name_linux": "firo",
+    "dir_name_mac": "Firo",
+    "dir_name_win": "Firo",
+    "repo_url": "https://github.com/firoorg/firo",
     "versions": [
-      "v0.14.0.1",
-      "v0.14.0.2"
+      "v0.14.17.2"
     ],
-    "xbridge_conf": "zcoin--v0.13.6.4.conf",
-    "wallet_conf": "zcoin--v0.13.6.4.conf"
+    "xbridge_conf": "firo--v0.14.17.2.conf",
+    "wallet_conf": "firo--v0.14.17.2.conf",
+    "daemon_stem": "firo"
   },
   {
     "blockchain": "ZENZO",

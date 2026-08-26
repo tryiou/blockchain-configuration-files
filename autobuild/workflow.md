@@ -47,7 +47,7 @@ to identify coins for which there are newer versions available than we currently
 ```
   mark@x230:~/src/blockdx-configs/tools$ python3 check-versions.py
   ...
-  XZC Version inconsistency. Old: v0.14.0.2. New: v0.14.9.2
+  FIRO Version inconsistency. Old: v0.14.0.2. New: v0.14.9.2
 ```
 
 **Output:**
@@ -107,7 +107,7 @@ within your local repo/autobuild/utils directory, for example:
 ```
 mark@x230:~/src/blockdx-configs$ cd autobuild/utils
 mark@x230:~/src/blockdx-configs/autobuild/utils$ python3 create-j2-confs.py
- AGM,BCH,BLOCK,BTC,BTX,CDZC,CNMC,COLX,DASH,DGB,DIVI,DOGE,DOGEC,EMC,FJC,GLC,IOP,IXC,LBC,LTC,LUX,LYNX,MONA,MRX,NMC,PART,PIVX,POLIS,QTUM,RVN,SCC,SPK,SWIFT,SYS,TRC,UFO,UNO,VIA,VIVO,VTC,WAGE,XMY,XVG,XZC,ZNZ
+ AGM,BCH,BLOCK,BTC,BTX,CDZC,CNMC,COLX,DASH,DGB,DIVI,DOGE,DOGEC,EMC,FJC,GLC,IOP,IXC,LBC,LTC,LUX,LYNX,MONA,MRX,NMC,PART,PIVX,POLIS,QTUM,RVN,SCC,SPK,SWIFT,SYS,TRC,UFO,UNO,VIA,VIVO,VTC,WAGE,XMY,XVG,FIRO,ZNZ
 mark@x230:~/src/blockdx-configs/autobuild/utils$ python3 create-j2-confs.py --coins SYS
 ```
 
