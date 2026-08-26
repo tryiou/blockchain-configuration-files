@@ -673,22 +673,6 @@
     "wallet_conf": "vivo--v0.12.1.17.conf"
   },
   {
-    "blockchain": "XCurrency",
-    "ticker": "XC",
-    "ver_id": "xcurrency--v3.0.05",
-    "ver_name": "XCurrency",
-    "conf_name": "xcurrency.conf",
-    "dir_name_linux": "xc3",
-    "dir_name_mac": "XC3",
-    "dir_name_win": "XC3",
-    "repo_url": "https://github.com/XCurrency/xc",
-    "versions": [
-      "v3.0.05"
-    ],
-    "xbridge_conf": "xcurrency--v3.0.05.conf",
-    "wallet_conf": "xcurrency--v3.0.05.conf"
-  },
-  {
     "blockchain": "ZCoin",
     "ticker": "XZC",
     "ver_id": "zcoin--v0.13.6.4",
