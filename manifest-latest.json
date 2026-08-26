@@ -673,23 +673,6 @@
     "wallet_conf": "vivo--v0.12.1.17.conf"
   },
   {
-    "blockchain": "Vsync",
-    "ticker": "VSX",
-    "ver_id": "vsync--v3.8.5.0",
-    "ver_name": "Vsync",
-    "conf_name": "vsync.conf",
-    "dir_name_linux": "vsync",
-    "dir_name_mac": "Vsync",
-    "dir_name_win": "Vsync",
-    "repo_url": "https://github.com/VsyncCrypto/VSX",
-    "versions": [
-      "v3.8.7.6",
-      "v3.8.7.7"
-    ],
-    "xbridge_conf": "vsync--v3.8.5.0.conf",
-    "wallet_conf": "vsync--v3.8.5.0.conf"
-  },
-  {
     "blockchain": "Wagerr",
     "ticker": "WGR",
     "ver_id": "wagerr--1.5.0",
