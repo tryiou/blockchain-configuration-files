@@ -673,22 +673,6 @@
     "wallet_conf": "vivo--v0.12.1.17.conf"
   },
   {
-    "blockchain": "Wagerr",
-    "ticker": "WGR",
-    "ver_id": "wagerr--1.5.0",
-    "ver_name": "Wagerr",
-    "conf_name": "wagerr.conf",
-    "dir_name_linux": "wagerr",
-    "dir_name_mac": "Wagerr",
-    "dir_name_win": "Wagerr",
-    "repo_url": "https://github.com/wagerr/wagerr",
-    "versions": [
-      "v3.1.0"
-    ],
-    "xbridge_conf": "wagerr--1.5.0.conf",
-    "wallet_conf": "wagerr--1.5.0.conf"
-  },
-  {
     "blockchain": "XCurrency",
     "ticker": "XC",
     "ver_id": "xcurrency--v3.0.05",
