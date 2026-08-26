@@ -688,21 +688,5 @@
     "xbridge_conf": "firo--v0.14.17.2.conf",
     "wallet_conf": "firo--v0.14.17.2.conf",
     "daemon_stem": "firo"
-  },
-  {
-    "blockchain": "ZENZO",
-    "ticker": "ZNZ",
-    "ver_id": "zenzo--v2.1.0",
-    "ver_name": "Zenzo",
-    "conf_name": "zenzo.conf",
-    "dir_name_linux": "zenzo",
-    "dir_name_mac": "Zenzo",
-    "dir_name_win": "Zenzo",
-    "repo_url": "https://github.com/ZENZO-Ecosystem/ZENZO-Core",
-    "versions": [
-      "v2.1.0"
-    ],
-    "xbridge_conf": "zenzo--v2.1.0.conf",
-    "wallet_conf": "zenzo--v2.1.0.conf"
   }
 ]
