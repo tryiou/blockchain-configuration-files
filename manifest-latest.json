@@ -399,7 +399,7 @@
   {
     "blockchain": "Namecoin",
     "ticker": "NMC",
-    "ver_id": "namecoin--nc0.20.0",
+    "ver_id": "namecoin--nc31.1",
     "ver_name": "Namecoin",
     "conf_name": "namecoin.conf",
     "dir_name_linux": "namecoin",
@@ -407,26 +407,26 @@
     "dir_name_win": "Namecoin",
     "repo_url": "https://github.com/namecoin/namecoin-core",
     "versions": [
-      "nc0.20.0"
+      "nc31.1"
     ],
-    "xbridge_conf": "namecoin--nc0.20.0.conf",
-    "wallet_conf": "namecoin--nc0.20.0.conf"
+    "xbridge_conf": "namecoin--nc31.1.conf",
+    "wallet_conf": "namecoin--nc31.1.conf"
   },
   {
     "blockchain": "Particl",
     "ticker": "PART",
-    "ver_id": "particl--v27.2.4.0",
-    "ver_name": "Particl v27.2.4.0+",
+    "ver_id": "particl--v23.2.10.0",
+    "ver_name": "Particl v23.2.10.0+",
     "conf_name": "particl.conf",
     "dir_name_linux": "particl",
     "dir_name_mac": "Particl",
     "dir_name_win": "Particl",
     "repo_url": "https://github.com/particl/particl-core",
     "versions": [
-      "v27.2.4.0"
+      "v23.2.10.0"
     ],
-    "xbridge_conf": "particl--v27.2.4.0.conf",
-    "wallet_conf": "particl--v27.2.4.0.conf"
+    "xbridge_conf": "particl--v23.2.10.0.conf",
+    "wallet_conf": "particl--v23.2.10.0.conf"
   },
   {
     "blockchain": "PIVX",
@@ -554,7 +554,9 @@
     "dir_name_win": "Syscoin",
     "repo_url": "https://github.com/syscoin/syscoin",
     "versions": [
-      "v5.1.0"
+      "v5.1.0",
+      "v5.1.1",
+      "v5.1.2"
     ],
     "xbridge_conf": "syscoin--v5.1.0.conf",
     "wallet_conf": "syscoin--v5.1.0.conf"
@@ -570,7 +572,9 @@
     "dir_name_win": "Syscoin",
     "repo_url": "https://github.com/syscoin/syscoin",
     "versions": [
-      "v5.1.0"
+      "v5.1.0",
+      "v5.1.1",
+      "v5.1.2"
     ],
     "xbridge_conf": "systest--v5.1.0.conf",
     "wallet_conf": "systest--v5.1.0.conf"
@@ -675,7 +679,7 @@
   {
     "blockchain": "Firo",
     "ticker": "FIRO",
-    "ver_id": "firo--v0.14.17.2",
+    "ver_id": "firo--v0.14.18.0",
     "ver_name": "Firo",
     "conf_name": "firo.conf",
     "dir_name_linux": "firo",
@@ -683,10 +687,10 @@
     "dir_name_win": "Firo",
     "repo_url": "https://github.com/firoorg/firo",
     "versions": [
-      "v0.14.17.2"
+      "v0.14.18.0"
     ],
-    "xbridge_conf": "firo--v0.14.17.2.conf",
-    "wallet_conf": "firo--v0.14.17.2.conf",
+    "xbridge_conf": "firo--v0.14.18.0.conf",
+    "wallet_conf": "firo--v0.14.18.0.conf",
     "daemon_stem": "firo"
   }
 ]
