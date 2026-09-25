@@ -10,7 +10,7 @@ rpcpassword=
 {% endif %}
 {% if testnet is not defined %}
 {% if daemon_family is not defined or daemon_family != 'btcd' %}
-rpcallowip=0.0.0.0/0
+rpcallowip=127.0.0.1
 {% endif %}
 port={{ p2pPort }}
 rpcport={{ rpcPort }}
@@ -19,6 +19,9 @@ testnet=1
 {% endif %}
 {% if txindex is defined %}
 txindex={{ txindex }}
+{% endif %}
+{% if debug is defined %}
+debug={{ debug }}
 {% endif %}
 {% if enableaccounts is defined %}
 enableaccounts={{ enableaccounts }}
@@ -61,7 +64,7 @@ rpcserialversion={{ rpcserialversion }}
 {% if testnet is defined and testnet is sameas true %}
 [test]
 {% if daemon_family is not defined or daemon_family != 'btcd' %}
-rpcallowip=0.0.0.0/0
+rpcallowip=127.0.0.1
 {% endif %}
 port={{ p2pPort }}
 rpcport={{ rpcPort }}

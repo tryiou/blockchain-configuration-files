@@ -125,7 +125,7 @@ with open('../../manifest-latest.json') as json_file:
                     version_data['deprecatedrpc'] = wallet_conf_data['deprecatedrpc']
                 if 'testnet' in wallet_conf_data:
                     version_data['testnet'] = True
-                for wallet_key in ('txindex', 'enableaccounts', 'staking',
+                for wallet_key in ('txindex', 'debug', 'enableaccounts', 'staking',
                                    'blocksonly', 'walletbroadcast', 'prune', 'daemon'):
                     if wallet_key in wallet_conf_data:
                         version_data[wallet_key] = wallet_conf_data[wallet_key]
