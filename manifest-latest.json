@@ -318,15 +318,7 @@
     "dir_name_win": "Litecoin",
     "repo_url": "https://github.com/litecoin-project/litecoin",
     "versions": [
-      "v0.21.1",
-      "v0.21.2",
-      "v0.21.2.1",
-      "v0.21.2.2",
-      "v0.21.3",
-      "v0.21.4",
-      "v0.21.5.4",
-      "v0.21.5.5",
-      "v0.21.5.6"
+      "v0.21.5.8"
     ],
     "xbridge_conf": "litecoin--v0.21.1.conf",
     "wallet_conf": "litecoin--v0.21.1.conf"
