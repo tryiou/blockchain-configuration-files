@@ -684,5 +684,22 @@
     "xbridge_conf": "firo--v0.14.18.0.conf",
     "wallet_conf": "firo--v0.14.18.0.conf",
     "daemon_stem": "firo"
+  },
+  {
+    "blockchain": "Verge",
+    "ticker": "XVG",
+    "ver_id": "verge--v26.8",
+    "ver_name": "Verge v26.8",
+    "conf_name": "verge.conf",
+    "dir_name_linux": "VERGE",
+    "dir_name_mac": "VERGE",
+    "dir_name_win": "VERGE",
+    "repo_url": "https://github.com/vergecurrency/verge",
+    "versions": [
+      "v26.8"
+    ],
+    "wallet_conf": "verge--v26.8.conf",
+    "xbridge_conf": "verge--v26.8.conf",
+    "daemon_family": "btc"
   }
 ]
