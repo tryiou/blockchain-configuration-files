@@ -663,7 +663,8 @@
     "dir_name_win": "Firo",
     "repo_url": "https://github.com/firoorg/firo",
     "versions": [
-      "v0.14.18.0"
+      "v0.14.18.0",
+      "v0.14.18.1"
     ],
     "xbridge_conf": "firo--v0.14.18.0.conf",
     "wallet_conf": "firo--v0.14.18.0.conf",
