@@ -21,6 +21,7 @@ Table of contents
 - [Blocknet's Blockchain Configuration Files](#blocknets-blockchain-configuration-files)
   - [Table of contents](#table-of-contents)
   - [Major update to workflow](#major-update-to-workflow)
+  - [Auditing and updating configurations](#auditing-and-updating-configurations)
   - [Configuration File Overview](#configuration-file-overview)
     - [Manifest File](#manifest-file)
     - [XBridge and Wallet Configuration Files](#xbridge-and-wallet-configuration-files)
@@ -42,6 +43,15 @@ Major update to workflow
 The coin update and addition process has been overhauled as of November 2021. Summary documentation regarding the entire workflow is available in [autobuild/workflow.md](autobuild/workflow.md).
 
 Detailed information about the coin configuration information is presented here.
+ 
+
+Auditing and updating configurations
+------------------------
+[`tools/audit-manifest/audit-manifest.py`](tools/audit-manifest/audit-manifest.py) audits this repository's own state: it probes every upstream repo in `manifest-latest.json` for moved or dead repositories, missing tags and newer releases, cross-checks the manifest against the committed `wallet-confs/`, `xbridge-confs/` and `autobuild/configs/*.base.j2`, reports P2P/RPC port collisions, and — on request — fact-checks every conf parameter against the coin's own source at the exact manifest tag. The same script drives maintenance (fee, `txindex` and port fixes, manifest version bumps) and scaffolds a new coin from a GitHub core-wallet repository.
+
+See [tools/audit-manifest/README.md](tools/audit-manifest/README.md) for the full mode table, the flags that modify files, exit codes and how to run its tests.
+
+[`tools/audit-manifest/dashboard.py`](tools/audit-manifest/dashboard.py) drives that same script for you — an interactive terminal dashboard for reading the reports and deciding what to apply, plus a one-task-one-JSON-object mode for scripts and agents; it adds no auditing of its own.
  
 
 Configuration File Overview

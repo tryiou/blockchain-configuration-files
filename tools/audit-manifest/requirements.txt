@@ -1,0 +1,13 @@
+# Optional dependencies for audit-manifest/dashboard.py.
+#
+# The Textual TUI is the ONLY thing in this directory that needs anything
+# beyond the Python standard library: audit-manifest.py and every JSON verb
+# of dashboard.py run on a bare interpreter. Install this file into a venv
+# dedicated to this tool if you want the TUI (and the TUI's tests). From the
+# repository root (the directory holding manifest-latest.json):
+#
+#   python3 -m venv .venv
+#   .venv/bin/pip install pytest -r tools/audit-manifest/requirements.txt
+#   .venv/bin/python -m pytest tools/audit-manifest/tests/ -q
+#
+textual>=8.2,<9
