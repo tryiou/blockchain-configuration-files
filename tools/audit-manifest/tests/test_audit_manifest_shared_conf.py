@@ -6,16 +6,10 @@ Proof-first: LTC 9 tags / BLOCK 7 tags share oldest conf, per-version loop must 
 REUSE-DRIFT WARN only when any_differs>0, clean sharing emits INFO not WARN,
 INFO does not increment warn and does not bubble under --strict-per-version.
 """
-import importlib.util
 from pathlib import Path
-import sys
 from unittest import mock
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_shared", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 ManifestCoin = audit.ManifestCoin
 ParamAuditEngine = audit.ParamAuditEngine

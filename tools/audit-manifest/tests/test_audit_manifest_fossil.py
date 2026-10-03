@@ -7,18 +7,12 @@ Covers mandatory creatordate fetch and fossil filtering:
   TRC v0.12.2.5 (2020-03-05) vs v0.13.0.0 (2016-01-09) -> fossil
 Ensures single probe_tag_dates call per repo and DRY helper.
 """
-import importlib.util
 import json
 import tempfile
 from pathlib import Path
 from unittest import mock
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_fossil", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-import sys
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 VersionEngine = audit.VersionEngine
 _newest_and_stale = audit._newest_and_stale

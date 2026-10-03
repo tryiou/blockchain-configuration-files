@@ -9,18 +9,12 @@ Proof-first: generic TargetSpacing height scan must handle
 
 These must FAIL before fix (raw fallback) and PASS after generic height-gate fallback.
 """
-import importlib.util
 import shutil
-import sys
 import tempfile
 import unittest.mock as mock
 from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_bt", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 CppSourceInspector = audit.CppSourceInspector
 SourceReader = audit.SourceReader

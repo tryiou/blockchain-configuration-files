@@ -16,15 +16,9 @@ Family evidence (all from local source checkouts at BCF-supported tags):
 - go_floor: LBC v0.22.120 (calcMinRequiredTxRelayFee, full-rate guard)
 - dust disabled: FIRO v0.14.18.0 (IsDust always false)
 """
-import importlib.util
-import sys
 from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_fee_policy", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 def _write(tree: Path, rel: str, text: str) -> Path:

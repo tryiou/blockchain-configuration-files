@@ -7,16 +7,9 @@ A transport failure (nonzero return code) or an exit of 0 with no status line
 is not an HTTP 200: the probe returns None so callers report the release as
 unreachable instead of quoting notes that were never fetched.
 """
-import importlib.util
 import subprocess
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_releaseprobe", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 class _StubRunner:

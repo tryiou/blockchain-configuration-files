@@ -27,14 +27,7 @@ from textual.widgets import (  # noqa: E402
     TabbedContent,
 )
 
-import importlib.util  # noqa: E402
-import sys  # noqa: E402
-
-DASH_PATH = Path(__file__).resolve().parents[1] / "dashboard.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_dashboard_tui", str(DASH_PATH))
-dash = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = dash
-spec.loader.exec_module(dash)
+import dashboard as dash  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -58,9 +51,9 @@ def cache(tmp_path, monkeypatch):
     """Point every cache path at a throwaway directory."""
     root = tmp_path / "cache"
     root.mkdir()
-    monkeypatch.setattr(dash, "CACHE_ROOT", root)
-    monkeypatch.setattr(dash, "LAST_REPORT", root / "last-run.json")
-    monkeypatch.setattr(dash, "LAST_META", root / "last-run.meta.json")
+    monkeypatch.setattr(dash.paths, "CACHE_ROOT", root)
+    monkeypatch.setattr(dash.paths, "LAST_REPORT", root / "last-run.json")
+    monkeypatch.setattr(dash.paths, "LAST_META", root / "last-run.meta.json")
     return root
 
 

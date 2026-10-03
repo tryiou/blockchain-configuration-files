@@ -7,15 +7,8 @@ fee_constants_for_coin() routes btcd-family coins through the Go inspector
 inspector. A btcd coin must not take its relay rate from a C++ tree, and a
 BTC coin must not resolve one out of a Go tree.
 """
-import importlib.util
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_feedispatch", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 def _make_go_tree(tmp_path, amount=1000):

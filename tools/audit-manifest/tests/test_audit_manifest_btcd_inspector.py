@@ -7,15 +7,8 @@ ships a pinned LBC genesis magic. Neither may leak into a verdict: a mixed
 key still resolves, and the genesis pin stays scoped to LBC instead of
 making every btcd coin look verified.
 """
-import importlib.util
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_btcdinsp", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 def test_btcd_txindex_mixed_case_key(tmp_path):

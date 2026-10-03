@@ -10,7 +10,6 @@ runs audit-manifest.py.
 Standard library + pytest only, so this file runs under the workspace venv
 next to the audit suite (Textual is not installed there).
 """
-import importlib.util
 import json
 import subprocess
 import sys
@@ -18,11 +17,9 @@ from pathlib import Path
 
 import pytest
 
+import dashboard as dash
+
 DASH_PATH = Path(__file__).resolve().parents[1] / "dashboard.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_dashboard", str(DASH_PATH))
-dash = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = dash
-spec.loader.exec_module(dash)
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +72,7 @@ def test_list_verb_is_pure_json_on_stdout():
 def test_importing_dashboard_never_imports_textual():
     code = (
         "import importlib.util, sys\n"
+        f"sys.path.insert(0, {str(DASH_PATH.parent)!r})\n"
         f"spec = importlib.util.spec_from_file_location('d', {str(DASH_PATH)!r})\n"
         "mod = importlib.util.module_from_spec(spec)\n"
         "spec.loader.exec_module(mod)\n"
@@ -93,7 +91,7 @@ def test_tui_without_textual_fails_with_an_install_hint(capsys, monkeypatch):
     so this branch is exercised whether or not Textual happens to be
     installed in the interpreter running the suite.
     """
-    monkeypatch.setattr(dash, "LOG_STREAM", sys.stderr)
+    monkeypatch.setattr(dash.paths, "LOG_STREAM", sys.stderr)
     monkeypatch.setitem(sys.modules, "textual", None)
     assert dash.run_tui() == 2
     err = capsys.readouterr().err
@@ -239,8 +237,8 @@ def test_envelope_ok_is_false_only_for_a_failed_run():
 def test_each_verb_gets_its_own_report_file(tmp_path):
     primary, last, log = dash.report_paths("plan-fix", None)
     assert primary.name == "plan-fix.json"
-    assert primary.parent == dash.CACHE_ROOT
-    assert last == dash.LAST_REPORT
+    assert primary.parent == dash.paths.CACHE_ROOT
+    assert last == dash.paths.LAST_REPORT
     assert log.name == "plan-fix.log"
 
 
@@ -248,7 +246,7 @@ def test_an_explicit_report_path_redirects_primary_and_log(tmp_path):
     target = tmp_path / "custom.json"
     primary, last, log = dash.report_paths("findings", str(target))
     assert primary == target
-    assert last == dash.LAST_REPORT
+    assert last == dash.paths.LAST_REPORT
     assert log == tmp_path / "custom.log"
 
 
@@ -259,8 +257,8 @@ def test_meta_sidecar_is_named_after_its_report(tmp_path):
 def test_best_fleet_report_prefers_a_fleet_report_over_the_last_run(tmp_path, monkeypatch):
     import os
 
-    monkeypatch.setattr(dash, "CACHE_ROOT", tmp_path)
-    monkeypatch.setattr(dash, "LAST_REPORT", tmp_path / "last-run.json")
+    monkeypatch.setattr(dash.paths, "CACHE_ROOT", tmp_path)
+    monkeypatch.setattr(dash.paths, "LAST_REPORT", tmp_path / "last-run.json")
     base = 1_700_000_000.0
 
     def stamp(name, when):
@@ -288,9 +286,9 @@ def test_best_fleet_report_prefers_a_fleet_report_over_the_last_run(tmp_path, mo
 
 
 def test_report_verb_without_a_prior_run_is_an_error(capsys, monkeypatch, tmp_path):
-    monkeypatch.setattr(dash, "LOG_STREAM", sys.stderr)
-    monkeypatch.setattr(dash, "LAST_REPORT", tmp_path / "last-run.json")
-    monkeypatch.setattr(dash, "LAST_META", tmp_path / "last-run.meta.json")
+    monkeypatch.setattr(dash.paths, "LOG_STREAM", sys.stderr)
+    monkeypatch.setattr(dash.paths, "LAST_REPORT", tmp_path / "last-run.json")
+    monkeypatch.setattr(dash.paths, "LAST_META", tmp_path / "last-run.meta.json")
     assert dash.main(["report"]) == 2
     out = capsys.readouterr()
     assert out.out == ""

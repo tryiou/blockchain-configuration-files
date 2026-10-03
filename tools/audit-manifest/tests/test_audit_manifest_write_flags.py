@@ -9,19 +9,13 @@ no fixes, no error, and an exit code derived from a probe-only summary. The
 failure was silent, so the end-to-end test below is the detector: it must
 show the param block running when only a write flag was asked for.
 """
-import importlib.util
 import io
-import sys
 from contextlib import redirect_stdout
 from pathlib import Path
 
 import pytest
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_writeflags", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 WRITE_FLAGS_NEEDING_PARAM = ("--write-config", "--fee-write", "--fix-ports")
 

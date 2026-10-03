@@ -7,15 +7,8 @@ Daemons spell the same key several ways across conf files and source
 case-sensitively reports the key as absent — which turns a check into SKIP
 or an empty value instead of a verdict.
 """
-import importlib.util
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_casekeys", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 def test_conf_val_ci_case_insensitive():

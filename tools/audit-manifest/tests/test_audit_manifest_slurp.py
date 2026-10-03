@@ -13,18 +13,12 @@ Proof-first tests for generic _slurp depth + guards (plan 08)
 These must FAIL before fix (depth3 not found, symlink/.git not guarded)
 and PASS after BFS depth≤3 with .git/symlink guard.
 """
-import importlib.util
 import os
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_slurp", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 SourceReader = audit.SourceReader
 

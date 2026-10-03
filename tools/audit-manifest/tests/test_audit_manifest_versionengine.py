@@ -3,16 +3,9 @@
 Test for Generic VersionEngine prefix — handle any leading letters (nc, vnc, sc)
 Proof-first R9: must FAIL before fix (nc cases None) and PASS after.
 """
-import importlib.util
-from pathlib import Path
 import pytest
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_ve", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-import sys
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 VersionEngine = audit.VersionEngine
 ManifestCoin = audit.ManifestCoin

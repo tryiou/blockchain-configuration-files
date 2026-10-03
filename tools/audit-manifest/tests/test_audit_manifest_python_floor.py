@@ -11,25 +11,34 @@ promise and neither is visible to a 3.12 interpreter's own parser:
   not callable`` when called on 3.9.
 
 Both are checked in ways that work whichever interpreter runs the suite:
-the source is compiled by the current one, and the f-string structure is
-read back out of the token stream, which a 3.12+ tokenizer still exposes
-even though it accepts the construct.
+every source file of the tool (both package trees plus the two CLI
+shims) is compiled by the current one, and the f-string structure is
+read back out of the token stream, which a 3.12+ tokenizer still
+exposes even though it accepts the construct.
 """
-import importlib.util
 import inspect
 import io
-import sys
 import tokenize
 from pathlib import Path
 
 import pytest
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_floor", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
-sys.modules.pop(spec.name, None)
+import audit_manifest as audit
+
+TOOL_DIR = Path(__file__).resolve().parents[1]
+PACKAGE_DIR = TOOL_DIR / "audit_manifest"
+DASHBOARD_DIR = TOOL_DIR / "dashboard"
+SHIM_PATH = TOOL_DIR / "audit-manifest.py"
+DASH_ENTRY = TOOL_DIR / "dashboard.py"
+# The tool's importable/executable surface: the audit package (including
+# the inspectors subpackage), the dashboard package, and both shims the
+# operator actually runs. (Test infra — conftest.py, tests/ — is pytest's
+# to parse at collection, not part of this contract.)
+SOURCE_PATHS = (
+    sorted(PACKAGE_DIR.rglob("*.py"))
+    + sorted(DASHBOARD_DIR.rglob("*.py"))
+    + [SHIM_PATH, DASH_ENTRY]
+)
 
 
 def _quote_of(text: str):
@@ -67,22 +76,24 @@ def _nested_fstring_delimiters(src: str):
 
 
 def test_source_parses_on_the_declared_floor():
-    src = AUDIT_PATH.read_text(encoding="utf-8")
+    assert SOURCE_PATHS, "tool source tree not found next to tests/"
+    for path in SOURCE_PATHS:
+        src = path.read_text(encoding="utf-8")
 
-    # 1. Whatever interpreter is running the suite must be able to compile it.
-    try:
-        compile(src, str(AUDIT_PATH), "exec")
-    except SyntaxError as exc:
-        pytest.fail(f"{AUDIT_PATH.name} does not parse: {exc}")
+        # 1. Whatever interpreter is running the suite must be able to compile it.
+        try:
+            compile(src, str(path), "exec")
+        except SyntaxError as exc:
+            pytest.fail(f"{path.name} does not parse: {exc}")
 
-    # 2. A 3.12+ parser accepts PEP 701, so go looking for the construct that
-    #    the older interpreters this file claims to support would reject.
-    offenders = _nested_fstring_delimiters(src)
-    assert not offenders, (
-        "an f-string reuses its own quote delimiter inside a replacement "
-        "field, which is a SyntaxError on Python < 3.12: "
-        + "; ".join(f"line {line}: {tok!r}" for line, tok in offenders)
-    )
+        # 2. A 3.12+ parser accepts PEP 701, so go looking for the construct that
+        #    the older interpreters this file claims to support would reject.
+        offenders = _nested_fstring_delimiters(src)
+        assert not offenders, (
+            f"{path}: an f-string reuses its own quote delimiter inside a replacement "
+            "field, which is a SyntaxError on Python < 3.12: "
+            + "; ".join(f"line {line}: {tok!r}" for line, tok in offenders)
+        )
 
 
 def test_conf_key_line_is_not_wrapped_twice_in_staticmethod():

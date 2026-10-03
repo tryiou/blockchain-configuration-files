@@ -14,15 +14,8 @@ New behavior 2: CoinScaffolder.derive_identity() must read daemon + datadir
 names from source (Makefile.am bin_PROGRAMS, GetDefaultDataDir) instead of
 guessing from the ticker, so --apply output is committable without hand-edits.
 """
-import importlib.util
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_scaffold", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 def _make_verge_like_tree(tmp_path):

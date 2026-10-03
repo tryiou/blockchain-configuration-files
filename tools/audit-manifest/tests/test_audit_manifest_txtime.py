@@ -8,25 +8,18 @@ Fix: W*== allows ')' and other non-word chars.
 
 Proof-first R9: this test must FAIL before fix and PASS after.
 """
-import importlib.util
 import re
-import sys
 import tempfile
 import unittest.mock as mock
 from pathlib import Path
 
 import pytest
 
-# Load audit-manifest module (hyphenated filename requires importlib)
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
+import audit_manifest as audit
 
 # <repo>/tools/audit-manifest/tests/<this file> -> <repo>
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LYNX_CHECK = REPO_ROOT / ".cache" / "audit-manifest" / "lynx_check"
-spec = importlib.util.spec_from_file_location("audit_manifest", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
 
 CppSourceInspector = audit.CppSourceInspector
 ManifestCoin = audit.ManifestCoin

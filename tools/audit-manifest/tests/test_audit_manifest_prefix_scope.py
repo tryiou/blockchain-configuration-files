@@ -11,15 +11,8 @@ earlier (chainparams.cpp:566/567/570, 0x38/0x3c/0x6c = 56/60/108).
 Rule: earliest match in slice order wins, regardless of which syntactic
 form matched. These must FAIL before the fix and PASS after.
 """
-import importlib.util
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_prefixscope", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 prefix_value = audit.CppSourceInspector.prefix_value
 

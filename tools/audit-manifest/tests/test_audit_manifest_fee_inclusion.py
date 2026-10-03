@@ -17,15 +17,8 @@ Equal-rate coins (BTC/LTC/DASH/...) must see zero behavior change.
 
 This test must FAIL before the fix (rate == relay only) and PASS after.
 """
-import importlib.util
-import sys
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parents[1] / "audit-manifest.py"
-spec = importlib.util.spec_from_file_location("audit_manifest_fee_incl", str(AUDIT_PATH))
-audit = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = audit
-spec.loader.exec_module(audit)
+import audit_manifest as audit
 
 
 def _make_split_policy_tree(tmp_path):
