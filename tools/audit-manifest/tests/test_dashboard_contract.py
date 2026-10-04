@@ -230,6 +230,27 @@ def test_envelope_ok_is_false_only_for_a_failed_run():
     assert _envelope(exit_code=2)["ok"] is False
 
 
+def test_envelope_preserves_the_versions_block():
+    """The envelope relays findings verbatim — the block survives."""
+    block = {
+        "declared": ["v1.0.0"],
+        "our_latest": "v1.0.0",
+        "remote_latest": "v2.0.0",
+        "newer_same": ["v2.0.0"],
+        "newer_alt": [],
+        "missing": [],
+        "found": ["v1.0.0"],
+        "tag_count": 3,
+        "conf": "x--v1.0.0",
+    }
+    env = _envelope(exit_code=1, findings=[
+        {"severity": "UPGRADE", "coin": "X", "category": "version",
+         "id": "REPO-ACTION", "versions": block},
+    ])
+    assert env["findings"][0]["versions"] == block
+    assert env["counts"]["total"] == 1
+
+
 # ---------------------------------------------------------------------------
 # Report plumbing
 # ---------------------------------------------------------------------------

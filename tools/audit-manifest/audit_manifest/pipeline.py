@@ -73,10 +73,9 @@ def audit_repos(
         for coin in coins:
             expected = coin.expected_tags()
             # Exact string match only — no canonical v handling:
-            # FOUND iff byte-equal to a remote tag from git ls-remote.
-            # Phantom v-prefix tags (e.g. MRX "v4.2.0.1" vs remote "4.2.0.1")
-            # intentionally remain MISSING and drive REVIEW — this is the
-            # correct manifest-inconsistency signal, not a detector bug.
+            # FOUND iff byte-equal to a remote tag from git ls-remote;
+            # a declared version that does not exist upstream stays
+            # MISSING and drives REVIEW.
             missing = [t for t in expected if tags is not None and t not in tags] if tags is not None else expected
             found = [t for t in expected if t not in missing]
             entries.append({

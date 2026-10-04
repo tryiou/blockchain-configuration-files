@@ -139,8 +139,9 @@ class ConfigAutoFixer:
             # Resolve source to get rate + fee policy
             mgr = SourceCheckoutManager()
             # Use coin's first version tag for source resolution
-            tag = coin.versions[0] if coin.versions else coin.ver_id.split("--", 1)[-1] if "--" in coin.ver_id else ""
+            tag = coin.versions[0] if coin.versions else ""
             if not tag:
+                logger.warning("FIX-FEES %s: no declared versions, cannot resolve source", coin.ticker)
                 return {}
             src_dir, mode = mgr.resolve_source(coin, tag, timeout=60)
             if not src_dir or mode.startswith(("clone-", "no-")):

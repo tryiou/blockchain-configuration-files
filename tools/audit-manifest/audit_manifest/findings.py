@@ -80,6 +80,7 @@ def build_findings(
         detail: str,
         file: Optional[str] = None,
         line: Optional[int] = None,
+        versions: Optional[Dict[str, Any]] = None,
     ) -> None:
         findings.append({
             "severity": severity,
@@ -90,6 +91,9 @@ def build_findings(
             "detail": detail,
             "file": file,
             "line": line,
+            # Always present: the versions block for REPO-ACTION findings,
+            # null everywhere else (see README — stable key, stable shape).
+            "versions": versions,
         })
 
     # --- repository state: one finding per non-OK manifest entry -------------
@@ -122,6 +126,20 @@ def build_findings(
                 category = "liveness"
             else:
                 category = "version"
+            versions_block: Dict[str, Any] = {
+                # List keys are defaulted so the README contract holds even
+                # for sparse entries: lists are never null, they are [] when
+                # there is nothing to report.
+                "declared": entry.get("versions") or [],
+                "our_latest": entry.get("our_latest"),
+                "remote_latest": rdata.get("remote_latest"),
+                "newer_same": rdata.get("newer_same") or [],
+                "newer_alt": rdata.get("newer_alt") or [],
+                "missing": entry.get("missing") or [],
+                "found": entry.get("found") or [],
+                "tag_count": rdata.get("tag_count"),
+                "conf": entry.get("ver_id"),
+            }
             add(
                 str(action.value if isinstance(action, ActionType) else action),
                 category,
@@ -129,6 +147,7 @@ def build_findings(
                 entry.get("ver_id"),
                 "REPO-ACTION",
                 detail,
+                versions=versions_block,
             )
 
     # --- local cross-check ---------------------------------------------------

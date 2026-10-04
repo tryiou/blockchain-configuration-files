@@ -242,24 +242,21 @@ class ManifestCoin:
         return self.daemon_family.lower() == "btcd"
 
     def expected_tags(self) -> List[str]:
-        """Union of versions list and ver_id tag suffix.
+        """Declared versions are the only held tags (manifest field contract).
 
-        Exact string semantics: FOUND iff byte-equal to a remote tag.
-        The union is intentionally not deduplicated via canonical/strip_v or
-        parse_version. If ver_id and versions disagree on a v-prefix
-        (e.g. MRX ver_id suffix "v4.2.0.1" vs versions ["4.2.0.1"],
-        SWIFT opposite "3.0.5" vs ["v3.0.5"]), the expected set contains
-        both forms (e.g. ["4.2.0.1", "v4.2.0.1"]). A phantom tag that
-        does not exist upstream (git ls-remote ground truth) will then
-        correctly appear as MISSING and drive REVIEW via classify_action.
-        This phantom REVIEW is the correct signal of a manifest
-        inconsistency, not a detector bug to suppress. No canonical
-        v-handling is applied here — exact match only.
+        The manifest field table in this repository's root ``README.md``
+        defines ``ver_id`` as the unique identifier of this conf version
+        group and ``versions`` as the array of wallet versions whose
+        strings match the upstream git tags exactly — the sole contract
+        for what this entry holds. The ver_id's version-shaped suffix is
+        never consulted: it cannot add a held tag or suppress a "newer
+        upstream tag" verdict.
+
+        Exact string semantics: FOUND iff byte-equal to a remote tag from
+        git ls-remote; no canonical v handling and no parse_version
+        normalization — "v4.2.0.1" and "4.2.0.1" are distinct tags.
         """
-        tags = set(self.versions)
-        if "--" in self.ver_id:
-            tags.add(self.ver_id.split("--", 1)[1])
-        return sorted(tags)
+        return sorted(set(self.versions))
 
 
 @dataclass

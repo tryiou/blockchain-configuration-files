@@ -174,37 +174,38 @@ def test_fleet_diversity_parse(tag, expected):
 
 
 # ---------------------------------------------------------------------------
-# ManifestCoin.expected_tags phantom union — exact string semantics
+# ManifestCoin.expected_tags — versions-only contract (manifest field table
+# in the repository root README.md: ver_id identifies the conf group,
+# only `versions` names held tags)
 # ---------------------------------------------------------------------------
 
-def test_expected_tags_mrx_phantom_union():
-    # MRX: versions ["4.2.0.1"] vs ver_id suffix "v4.2.0.1" => union both forms
+def test_expected_tags_ignore_ver_id_suffix_disagreement():
+    # MRX: versions ["4.2.0.1"] vs ver_id suffix "v4.2.0.1" → versions wins.
     coin = ManifestCoin(ticker="MRX", ver_id="metrix--v4.2.0.1", versions=["4.2.0.1"])
-    assert coin.expected_tags() == ["4.2.0.1", "v4.2.0.1"]
+    assert coin.expected_tags() == ["4.2.0.1"]
 
 
-def test_expected_tags_swift_phantom_union():
-    # SWIFT: opposite direction — ver_id "3.0.5" vs versions ["v3.0.5"]
+def test_expected_tags_ignore_ver_id_suffix_disagreement_opposite():
+    # SWIFT: ver_id suffix "3.0.5" vs versions ["v3.0.5"] → versions wins.
     coin = ManifestCoin(ticker="SWIFT", ver_id="swiftcash--3.0.5", versions=["v3.0.5"])
-    assert coin.expected_tags() == ["3.0.5", "v3.0.5"]
+    assert coin.expected_tags() == ["v3.0.5"]
 
 
-def test_expected_tags_no_phantom_when_consistent():
+def test_expected_tags_declared_and_consistent():
     coin = ManifestCoin(ticker="BTC", ver_id="bitcoin--v22-final", versions=["v22-final"])
     assert coin.expected_tags() == ["v22-final"]
 
 
 def test_expected_tags_exact_match_drives_missing():
-    # Exact semantics: FOUND iff byte-equal to remote tag. MRX remote has
-    # only "4.2.0.1" — phantom "v4.2.0.1" must remain MISSING and would drive REVIEW.
-    coin = ManifestCoin(ticker="MRX", ver_id="metrix--v4.2.0.1", versions=["4.2.0.1"])
+    # Exact semantics: FOUND iff byte-equal to a remote tag. A declared
+    # version that does not exist upstream is MISSING and drives REVIEW;
+    # the ver_id suffix never enters the comparison.
+    coin = ManifestCoin(ticker="MRX", ver_id="metrix--v4.2.0.1",
+                        versions=["4.2.0.1", "4.1.0.0"])
     expected = coin.expected_tags()
-    remote_tags = {"4.2.0.1", "4.1.0.0"}  # no v-prefix variant upstream
+    remote_tags = {"4.2.0.1", "4.0.0.0"}
     missing = [t for t in expected if t not in remote_tags]
     found = [t for t in expected if t not in missing]
     assert found == ["4.2.0.1"]
-    assert missing == ["v4.2.0.1"]
-    # union is intentionally not deduplicated via canonical/strip_v
-    assert VersionEngine.parse_version("4.2.0.1") == VersionEngine.parse_version("v4.2.0.1")
-    # but strings remain distinct — exact match only
-    assert "v4.2.0.1" not in remote_tags
+    assert missing == ["4.1.0.0"]
+    assert "v4.2.0.1" not in expected, "the ver_id suffix is not a held tag"

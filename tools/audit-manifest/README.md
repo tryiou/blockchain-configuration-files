@@ -234,6 +234,25 @@ skipped), and **FAIL** is reserved for mathematically certain breakage (fee
 below the relay floor, `COIN=0`, `TxVersion` above bound). Parameter results
 never change the exit code — judgment belongs to whoever reads the report.
 
+### Version signal and the `versions` block
+
+Held tags come **only** from the manifest's `versions` array — the field
+contract in this repository's root `README.md`, where `ver_id` is a unique
+identifier for a conf version group (it never yields a tag) and `versions`
+must match the upstream git tags exactly. An entry that declares no
+versions is audited as `no-tag`; its `ver_id` is never used as a fallback.
+
+Every finding carries a `versions` key with a stable shape
+(`schema_version` stays `1`). For `REPO-ACTION` findings it is an object —
+`{declared, our_latest, remote_latest, newer_same, newer_alt, missing,
+found, tag_count, conf}` — assembled from the manifest entry and the
+probe: list-valued keys (`declared`, `missing`, `found`, `newer_same`,
+`newer_alt`) are `[]` when there is nothing to report; `our_latest`,
+`remote_latest` and `tag_count` are `null` when unavailable (an
+unreachable repo has no `tag_count`); `conf` carries the entry's
+`ver_id` — the conf version-group identifier. For every other finding the
+value is `null`. The dashboard envelope relays the block untouched.
+
 ---
 
 ## Tests

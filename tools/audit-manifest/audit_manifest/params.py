@@ -181,8 +181,6 @@ class ParamAuditEngine:
     ) -> ParamAuditResult:
         all_tags = coin.expected_tags()
         entry_tag = VersionEngine.max_version_tag(set(coin.versions)) if coin.versions else None
-        if entry_tag is None and "--" in coin.ver_id:
-            entry_tag = coin.ver_id.split("--", 1)[1]
 
         if not entry_tag:
             return ParamAuditResult(tag=None, source=None, mode="no-tag")
