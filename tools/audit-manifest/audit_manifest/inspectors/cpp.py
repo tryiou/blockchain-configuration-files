@@ -24,12 +24,35 @@ from ..constants import (
     PREFIX_SKIP_FMT,
 )
 from ..model import FeePolicy, ManifestCoin, ParamStatus, max_status
+from ..probe import SystemCommandRunner
 from ..util import _safe_arith_float, conf_val_ci, eval_cnum
 from .base import CppExpressionEvaluator
 
-# Process-wide cache for CURRENT_CHAIN detection keyed by str(src_dir).
-# Tests clear it in place between cases (shared object identity matters).
+# Process-wide cache for CURRENT_CHAIN detection keyed by the checkout
+# path AND its HEAD: the tool keeps ONE folder per coin and switches
+# tags inside it, so the path alone no longer identifies the tree being
+# read. Tests clear it in place between cases (shared object identity
+# matters).
 _CURRENT_CHAIN_CACHE: Dict[str, Optional[str]] = {}
+
+
+def _src_head(src_dir: Path) -> Optional[str]:
+    """HEAD commit of ``src_dir``, or ``None`` when the tree has no identity.
+
+    Part of the cache key: a tag switch in place must invalidate the
+    chain name that was read for the previous tag. ``None`` (non-git
+    fixture tree, or git itself unavailable) means "never cache" rather
+    than a shared sentinel that every tree would collide on. The call
+    goes through the shared runner, which logs exceptions and timeouts;
+    a plain non-zero exit (a non-git fixture tree) yields ``None``
+    quietly.
+    """
+    proc = SystemCommandRunner.run(
+        ["git", "-C", str(src_dir), "rev-parse", "HEAD"], 30
+    )
+    if proc is not None and proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    return None
 
 
 class ChainSliceMixin:
@@ -971,14 +994,34 @@ class ChainTimingMixin:
 
     @classmethod
     def _current_chain(cls, src_dir: Path) -> Optional[str]:
+        """Chain name for the tree currently at ``src_dir`` (cached per HEAD).
+
+        One folder per coin is switched between tags in place, so the
+        cache is keyed by path AND HEAD: a tag switch invalidates the
+        name read for the previous tag. Without a usable HEAD (non-git
+        fixture, or git unavailable) nothing is cached — a wrong but
+        cached chain name would corrupt prefix, port and tx-time rows
+        for every later tag. The key cannot see in-place edits, so the
+        caller side of the contract matters: production callers all
+        read a tree that just passed ``resolve_for``'s clean gate.
+        """
+        head = _src_head(src_dir)
+        if head is None:
+            return cls._compute_current_chain(src_dir)
+        cache_key = f"{src_dir}@{head}"
+        if cache_key in _CURRENT_CHAIN_CACHE:
+            return _CURRENT_CHAIN_CACHE[cache_key]
+        value = cls._compute_current_chain(src_dir)
+        _CURRENT_CHAIN_CACHE[cache_key] = value
+        return value
+
+    @classmethod
+    def _compute_current_chain(cls, src_dir: Path) -> Optional[str]:
         """Generic CURRENT_CHAIN detection without hard-coding tickers.
 
         Checks Makefile.am/autogen.sh/configure.ac NAME, fallback to chainparams
         spec keys. Returns lowercased chain name or None if not found.
         """
-        cache_key = str(src_dir)
-        if cache_key in _CURRENT_CHAIN_CACHE:
-            return _CURRENT_CHAIN_CACHE[cache_key]
         # Primary: NAME in autogen.sh is the chain name
         for rel in ("autogen.sh", "src/Makefile.am", "Makefile.am", "configure.ac", "src/Makefile.in", "Makefile.in"):
             t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
@@ -996,8 +1039,7 @@ class ChainTimingMixin:
             if mn:
                 # Verify this is chain-related (gate Makefile.in only if CURRENT_CHAIN present)
                 if "CURRENT_CHAIN" in t or rel == "autogen.sh":
-                    _CURRENT_CHAIN_CACHE[cache_key] = mn.group(1).lower()
-                    return _CURRENT_CHAIN_CACHE[cache_key]
+                    return mn.group(1).lower()
             m = re.search(r"CURRENT_CHAIN\s*=?\s*\"?\$?\(NAME\)\"?", t)
             if m:
                 mn2 = None
@@ -1007,8 +1049,7 @@ class ChainTimingMixin:
                     mn2 = m_cand
                     break
                 if mn2:
-                    _CURRENT_CHAIN_CACHE[cache_key] = mn2.group(1).lower()
-                    return _CURRENT_CHAIN_CACHE[cache_key]
+                    return mn2.group(1).lower()
         # Fallback: inspect chainparams spec keys – generic frequency based
         for rel in ("src/kernel/chainparams.cpp", "src/chainparams.cpp"):
             t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
@@ -1023,7 +1064,6 @@ class ChainTimingMixin:
                     # encountered in file order that is not a test chain.
                     tied = [k for k, c in most_common if c == max_c]
                     if len(tied) == 1:
-                        _CURRENT_CHAIN_CACHE[cache_key] = tied[0]
                         return tied[0]
                     # Preserve file order for tie-break
                     seen = []
@@ -1035,11 +1075,8 @@ class ChainTimingMixin:
                             seen.append(lk)
                     for lk in seen:
                         if lk in tied and lk not in ("test", "testnet", "regtest", "signet", "main"):
-                            _CURRENT_CHAIN_CACHE[cache_key] = lk
                             return lk
-                    _CURRENT_CHAIN_CACHE[cache_key] = tied[0]
                     return tied[0]
-        _CURRENT_CHAIN_CACHE[cache_key] = None
         return None
 
     @classmethod

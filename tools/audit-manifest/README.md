@@ -76,7 +76,8 @@ resolved to `manifest-latest.json` at the root of this repository.
 | JSON report | `--report <path>` | Report file only |
 
 `--local-only` runs only the local cross-check, the fleet port matrix and
-(when asked) `--param-check`, so it is fast and offline — but tags,
+(when asked) `--param-check`, so it is fast — no remote probes, though a
+source checkout still fetches a tag its cache does not hold. Tags,
 liveness, staleness and `--update-versions` data are unavailable, and the
 report carries a zeroed `summary` with `meta.local_only: true` so a caller
 can tell the difference. `--dry-run` applies to every write flag: the
@@ -158,10 +159,13 @@ local-only verb, `--with-changelog` widens a `--no-changelog` verb,
 `--local-only` narrows anything. Nothing is ever narrowed silently.
 
 **`plan-fix` is expensive on purpose.** It runs the full `--param-check`, so
-it clones every coin's source: measured **11 min on a cold cache**, much less
-once `.cache/audit-manifest/` is warm. `apply-fix` repeats that work, so run
-`plan-fix` first, read it, and only then apply. If all you want is the diff,
-`--dry-run` is available on any write verb.
+it touches every coin's source: measured **11 min on a cold cache**. A warm
+cache skips the clone — it stays offline only for a tag already checked
+out from the same URL with a clean tree; a multi-version run switches
+HEAD per version, and every switch past the tag the cache already sits
+at costs one refetch. `apply-fix` repeats that work, so run `plan-fix` first,
+read it, and only then apply. If all you want is the diff, `--dry-run` is
+available on any write verb.
 
 ### The JSON envelope
 
@@ -263,25 +267,20 @@ From the root of this repository:
 python3 -m pytest tools/audit-manifest/ -q
 ```
 
-188 tests: **144** covering the version engine, fee policy/floor model,
-block-time and tx-time extraction, prefix scoping, scaffold extraction,
-shared-conf and per-version audit behaviour; **24** covering
-`dashboard.py`'s contract (verbs, flag translation, exit codes, JSON
-envelope, report plumbing); **20** driving the TUI through Textual's own
-runner. Nothing skips when `requirements.txt` is installed — without it the
-20 TUI tests drop out on their own (168 remain) and the suite needs nothing
-beyond `pytest`.
+The suite covers the version engine, fee policy/floor model, block-time
+and tx-time extraction, prefix scoping, scaffold extraction, shared-conf
+and per-version audit behaviour; `dashboard.py`'s contract (verbs, flag
+translation, exit codes, JSON envelope, report plumbing); and the TUI,
+driven through Textual's own runner. Nothing skips on a fresh clone
+once `requirements.txt` is installed — without it the TUI tests drop out on
+their own and the suite needs nothing beyond `pytest`.
 
 The suite is hermetic: probes are stubbed, `--local-only` is used where a
 real invocation is needed, and no test contacts the network or modifies the
 working tree — about two seconds without the TUI tests, ten with them.
 
-Most tests build their own fixtures. Two of them in
-`test_audit_manifest_txtime.py` need a real checkout of a coin's source under
-`.cache/audit-manifest/` (`.cache/audit-manifest/lynx_check`); both **skip**
-when that checkout is absent rather than fail, so the suite stays green on a
-fresh clone. Run a `--param-check` pass for that coin to create the checkout
-and they run again.
+Most tests build their own fixtures under pytest's tmp dir. Nothing
+skips on a fresh clone and no test needs a warm `.cache/audit-manifest/`.
 
 Requires `pytest` (the tool itself does not — it is stdlib-only). The TUI
 tests additionally need Textual, from `tools/audit-manifest/requirements.txt`.
@@ -292,9 +291,21 @@ tests additionally need Textual, from `tools/audit-manifest/requirements.txt`.
 
 `.cache/audit-manifest/` holds three things, all disposable:
 
-* **Source checkouts** — `<coin>_check` directories cloned at the exact
-  manifest tag for `--param-check`. Existing checkouts whose HEAD already
-  matches the requested tag are reused instead of re-cloned.
+* **Source checkouts** — `repos/<ticker>`, ONE folder per coin (never per
+  tag), used by `--param-check`, `--fee-write`, `apply-fix` and
+  `scaffold`. A missing folder is
+  shallow-cloned at the exact manifest tag; an existing one is reused
+  (offline) only if it already sits at that tag's commit with a clean
+  tree and the right origin URL — otherwise the tag is force-fetched and
+  switched in. The folder is scratch: switching discards local edits
+  and clears stray files. Failures are loud (an ERROR line plus a
+  `fetch-failed`/`clone-failed` status in the report — `no-repo-url` or
+  `no-valid-ticker` when the manifest entry itself is unusable) and the
+  next pass repairs a half-finished switch — except a `.git/index.lock`
+  left by a killed run: git names it on the ERROR line and only you can
+  remove it. Run one `param-check` pass per coin at
+  a time — concurrent runs on one coin share a working tree and a git
+  index.
 * **Changelog cache** — `.changelog_cache/`, GitHub release bodies already
   probed for mandatory-hard-fork detection.
 * **Dashboard artefacts** — `<verb>.json` (the report), `<verb>.log` (the
@@ -304,3 +315,12 @@ tests additionally need Textual, from `tools/audit-manifest/requirements.txt`.
 
 The directory is gitignored. Delete it (or just `.changelog_cache/`) to force
 fresh probes; nothing of value is lost.
+
+Older checkouts (the `<coin>_check` / `<coin>_<tag>_check` /
+`scaffold_<ticker>_check` folders, a multi-GB bulk in total) predate the
+one-repo-per-coin layout: they are stale, and the tool neither reads nor
+deletes them — remove them yourself when you want the space back.
+`repos/<ticker>` is scratch too: the tool never deletes a checkout
+folder itself (an obstruction it reports is yours to remove);
+everything inside one is scratch — nested folders included — and stray
+files or leftover staging folders under `repos/` are safe to delete.

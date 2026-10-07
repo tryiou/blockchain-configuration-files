@@ -22,11 +22,13 @@ Output: human-readable report on stdout, optionally a JSON report via --report (
 
 --param-check adds a fact-check pass that verifies every XBridge-conf and
 core-wallet-conf parameter against the coin's own source AT THE EXACT
-MANIFEST TAG (reuses .cache/audit-manifest/<coin>_check clones whose HEAD
-matches the tag, otherwise shallow-clone repo_url at that tag; btcd-family
-handled via golang layout: chaincfg/params.go + mempool/policy.go). It is a
-REPORTING tool: rows state observed values with file:line citations and,
-where a value differs from source, the git birth-date of that conf line.
+MANIFEST TAG (one checkout per coin at .cache/audit-manifest/repos/<ticker>:
+HEAD checked first, reused only when it already is that tag's commit from
+this repo URL AND the tree has no edits or leftover files; otherwise the
+exact tag is force-fetched into that folder, switched in and verified;
+btcd-family handled via golang layout: chaincfg/params.go + mempool/policy.go).
+It is a REPORTING tool: rows state observed values with file:line citations
+and, where a value differs from source, the git birth-date of that conf line.
 No intent is assumed and param results NEVER affect exit codes; judgment
 belongs to whoever reads the report. Statuses are factual:
 MATCH/DIFFERS (vs source constant), BROKEN (our own files disagree),

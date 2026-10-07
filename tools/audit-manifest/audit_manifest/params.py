@@ -73,7 +73,13 @@ class ParamAuditEngine:
             daemon_stem=coin.daemon_stem,
         )
 
-        src_dir, mode = self.checkout_manager.resolve_source(shard, version_tag, timeout)
+        try:
+            src_dir, mode = self.checkout_manager.resolve_source(shard, version_tag, timeout)
+        except ValueError as exc:
+            # Malformed manifest ticker: degrade this one entry to a
+            # structured no-source row instead of aborting the whole run.
+            logger.error("PARAM-CHECK %s @ %s: %s", coin.ticker or "?", version_tag, exc)
+            src_dir, mode = None, "no-valid-ticker"
         if src_dir is None:
             return ParamAuditResult(
                 tag=version_tag,

@@ -21,11 +21,13 @@ Output: human-readable report on stdout, optionally a JSON report via --report (
 
 --param-check adds a fact-check pass that verifies every XBridge-conf and
 core-wallet-conf parameter against the coin's own source AT THE EXACT
-MANIFEST TAG (reuses .cache/audit-manifest/<coin>_check clones whose HEAD
-matches the tag, otherwise shallow-clone repo_url at that tag; btcd-family
-handled via golang layout: chaincfg/params.go + mempool/policy.go). It is a
-REPORTING tool: rows state observed values with file:line citations and,
-where a value differs from source, the git birth-date of that conf line.
+MANIFEST TAG (one checkout per coin at .cache/audit-manifest/repos/<ticker>:
+HEAD checked first, reused only when it already is that tag's commit from
+this repo URL AND the tree has no edits or leftover files; otherwise the
+exact tag is force-fetched into that folder, switched in and verified;
+btcd-family handled via golang layout: chaincfg/params.go + mempool/policy.go).
+It is a REPORTING tool: rows state observed values with file:line citations
+and, where a value differs from source, the git birth-date of that conf line.
 No intent is assumed and param results NEVER affect exit codes; judgment
 belongs to whoever reads the report. Statuses are factual:
 MATCH/DIFFERS (vs source constant), BROKEN (our own files disagree),
@@ -99,7 +101,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scaffold-out-dir", default=None, help="Output dir for scaffold")
     parser.add_argument("--batch", default=None, help="Batch label for report meta, e.g. 02/11")
     parser.add_argument("--no-changelog", action="store_true", help="Skip changelog mandatory HF probe (avoids GitHub API)")
-    parser.add_argument("--local-only", action="store_true", help="Skip remote repository probes; run only the local cross-check, the fleet port matrix and (if asked) --param-check. Fast and offline: tags, liveness, staleness and --update-versions data are unavailable")
+    parser.add_argument("--local-only", action="store_true", help="Skip remote repository probes; run only the local cross-check, the fleet port matrix and (if asked) --param-check. Fast — no remote probes (a source checkout still fetches a tag its cache lacks): tags, liveness, staleness and --update-versions data are unavailable")
     parser.add_argument("--update-versions", action="store_true", help="Append latest remote tag to manifest versions for UPGRADE coins (additive: old versions stay buildable; writes BCF manifest + regenerates base.j2)")
     parser.add_argument("--replace-versions", action="store_true", help="With --update-versions, collapse to the latest tag only and rename confs (drop old versions; for forced-fork drops only)")
     return parser

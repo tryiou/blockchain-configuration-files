@@ -1,7 +1,8 @@
 """Coin scaffolding: extract fleet facts from a fresh clone and emit confs.
 
-``CoinScaffolder.run`` probes the repo, shallow-clones the chosen tag into
-scratch, extracts ports/prefixes/fees from source, picks collision-free ports
+``CoinScaffolder.run`` probes the repo, resolves the chosen tag through
+the shared per-coin checkout (cloned, reused or fetched), extracts
+ports/prefixes/fees from source, picks collision-free ports
 against the live fleet, and writes (or prints) the new wallet/xbridge conf
 pair plus a manifest snippet. Every user-facing line goes through
 :func:`report_line`.
@@ -16,7 +17,6 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from .constants import CACHE_ROOT
 from .inspectors import BtcdSourceInspector, CppSourceInspector
 from .model import ManifestCoin, RepoStatus, recommended_fees
 from .ports import PortCollisionManager
@@ -24,7 +24,12 @@ from .probe import RemoteProbeService, SystemCommandRunner
 from .reporting import report_line
 from .util import _safe_arith_float, plan_entry
 from .versioning import VersionEngine
-from .checkout import SourceReader
+from .checkout import (
+    SourceCheckoutManager,
+    SourceReader,
+    canonical_repo_url,
+    repo_checkout_dir,
+)
 
 
 class CoinScaffolder:
@@ -211,10 +216,19 @@ class CoinScaffolder:
             return 2, result
         # Fleet convention is bare repo URLs (no trailing .git): normalize the
         # input so --apply output matches, instead of flagging our own entry
-        # MOVED on the next audit pass.
-        repo_url = repo_url.rstrip("/").removesuffix(".git")
+        # MOVED on the next audit pass. Same helper the reuse gate compares
+        # with, so the two flows never disagree about URL identity.
+        repo_url = canonical_repo_url(repo_url)
 
         ticker = (args.scaffold_ticker or self.derive_ticker(repo_url)).upper()
+        # Validate against the checkout-path contract before any I/O; the
+        # usage error must be structured (exit 2 + envelope), not a traceback.
+        try:
+            repo_checkout_dir(ticker)
+        except ValueError as exc:
+            report_line(f"ERROR: {exc}")
+            result["error"] = str(exc)
+            return 2, result
         tag = args.scaffold_tag
         if not tag:
             report_line(f"Probing tags for {repo_url} ...")
@@ -234,22 +248,20 @@ class CoinScaffolder:
             report_line(f"Using supplied tag: {tag}")
 
         report_line(f"Ticker: {ticker}")
-        tmp_root = CACHE_ROOT
-        tmp_root.mkdir(parents=True, exist_ok=True)
-        target = tmp_root / f"scaffold_{ticker.lower()}_check"
-        shutil.rmtree(target, ignore_errors=True)
-
-        report_line(f"Cloning {repo_url} @ {tag} ...")
-        proc = self.runner.run(
-            ["git", "clone", "-q", "--depth", "1", "--branch", tag, repo_url, str(target)],
-            max(args.timeout, 60),
-            env_extra={"GIT_TERMINAL_PROMPT": "0"},
+        report_line(f"Resolving {repo_url} @ {tag} ...")
+        target, mode = SourceCheckoutManager(runner=self.runner).resolve_for(
+            ticker, repo_url, tag, max(args.timeout, 60)
         )
-        if proc is None or proc.returncode != 0 or not target.is_dir():
-            report_line(f"ERROR: clone failed for {repo_url} @ {tag}")
-            shutil.rmtree(target, ignore_errors=True)
-            result["error"] = f"clone failed for {repo_url} @ {tag}"
+        if target is None:
+            report_line(f"ERROR: source resolution failed for {repo_url} @ {tag} ({mode})")
+            result["error"] = f"source resolution failed for {repo_url} @ {tag} ({mode})"
             return 1, result
+        if mode == "reused":
+            report_line(f"Reusing existing checkout for {ticker} @ {tag}")
+        elif mode == "fetched":
+            report_line(f"Fetched {tag} into the existing checkout for {ticker}")
+        elif mode == "cloned":
+            report_line(f"Cloned {tag} into {target}")
 
         want_test = ticker.upper() in ("TBLOCK", "TSYS", "TPIVX", "TBTC", "TBCH")
         params = self.extract_scaffold_params(target, want_test)
@@ -427,5 +439,5 @@ class CoinScaffolder:
         else:
             report_line(f"Print-only (no --apply): files under {out_dir} (not in repo)")
 
-        report_line(f"Source clone kept at {target} for inspection")
+        report_line(f"Source checkout kept at {target} for inspection (a later pass may switch it)")
         return 0, result

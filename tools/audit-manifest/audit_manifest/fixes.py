@@ -143,8 +143,15 @@ class ConfigAutoFixer:
             if not tag:
                 logger.warning("FIX-FEES %s: no declared versions, cannot resolve source", coin.ticker)
                 return {}
-            src_dir, mode = mgr.resolve_source(coin, tag, timeout=60)
-            if not src_dir or mode.startswith(("clone-", "no-")):
+            try:
+                src_dir, mode = mgr.resolve_source(coin, tag, timeout=60)
+            except ValueError as exc:
+                # Same contract as param-check: an unusable ticker is
+                # data, not a crash — name it as such instead of the
+                # generic failure line below.
+                logger.error("FIX-FEES %s: %s", coin.ticker, exc)
+                return {}
+            if not src_dir or mode.startswith(("clone-", "fetch-", "no-")):
                 logger.warning("FIX-FEES %s: cannot resolve source for %s", coin.ticker, tag)
                 return {}
             rate, rate_ev, _, _ = fee_constants_for_coin(coin, src_dir)

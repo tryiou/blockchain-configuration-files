@@ -13,13 +13,7 @@ import tempfile
 import unittest.mock as mock
 from pathlib import Path
 
-import pytest
-
 import audit_manifest as audit
-
-# <repo>/tools/audit-manifest/tests/<this file> -> <repo>
-REPO_ROOT = Path(__file__).resolve().parents[3]
-LYNX_CHECK = REPO_ROOT / ".cache" / "audit-manifest" / "lynx_check"
 
 CppSourceInspector = audit.CppSourceInspector
 ManifestCoin = audit.ManifestCoin
@@ -27,15 +21,40 @@ ParamStatus = audit.ParamStatus
 _CURRENT_CHAIN_CACHE = audit._CURRENT_CHAIN_CACHE
 
 
-@pytest.mark.skipif(
-    not LYNX_CHECK.is_dir(),
-    reason=f"no local source checkout at {LYNX_CHECK} (run a --param-check pass to create it)",
-)
-def test_current_chain_returns_lynx():
-    # Clear cache to ensure fresh read of autogen.sh sed NAME=lynx
+def _lynx_tree(tmp_path: Path) -> Path:
+    """Hermetic source tree: what _current_chain parses plus a chain-gated
+    nTime serialization guard — no real checkout, no skips.
+
+    Intentionally parser-shaped: it pins the inspector's behavior, not
+    drift in upstream source (the real checkout is not part of the suite).
+    The leading BITCOIN_DAEMON_NAME decoy exercises the '_' filter that
+    must skip daemon-name assignments.
+    """
+    (tmp_path / "autogen.sh").write_text(
+        "BITCOIN_DAEMON_NAME = bitcoind\nNAME = lynx\n", encoding="utf-8"
+    )
+    prim = tmp_path / "src" / "primitives"
+    prim.mkdir(parents=True)
+    (prim / "transaction.h").write_text(
+        "struct CTransaction {\n"
+        "    const uint32_t nTime;\n"
+        "    template<typename Stream> void Serialize(Stream& s) const {\n"
+        "        if (std::string(CURRENT_CHAIN) == \"infiniloop\") {\n"
+        "            s >> tx.nTime;\n"
+        "        }\n"
+        "    }\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_current_chain_returns_lynx(tmp_path):
+    # autogen.sh NAME=lynx is what the parser must pick up.
+    src = _lynx_tree(tmp_path)
     _CURRENT_CHAIN_CACHE.clear()
-    chain = CppSourceInspector._current_chain(LYNX_CHECK)
-    assert chain == "lynx", f"expected 'lynx' from {LYNX_CHECK} autogen.sh, got {chain!r}"
+    chain = CppSourceInspector._current_chain(src)
+    assert chain == "lynx", f"expected 'lynx' from autogen.sh, got {chain!r}"
 
 
 def test_guard_regex_handles_std_string_paren():
@@ -49,22 +68,20 @@ def test_guard_regex_handles_std_string_paren():
     assert m_old is None, "old regex \\s*== should NOT match when ')' present — confirms bug"
 
 
-@pytest.mark.skipif(
-    not LYNX_CHECK.is_dir(),
-    reason=f"no local source checkout at {LYNX_CHECK} (run a --param-check pass to create it)",
-)
-def test_check_txtime_lynx_match_not_warn():
+def test_check_txtime_lynx_match_not_warn(tmp_path):
+    src = _lynx_tree(tmp_path)
     _CURRENT_CHAIN_CACHE.clear()
     # Verify _current_chain first
-    chain = CppSourceInspector._current_chain(LYNX_CHECK)
+    chain = CppSourceInspector._current_chain(src)
     assert chain == "lynx"
 
     coin = ManifestCoin(ticker="LYNX", ver_id="lynx--v28.0.0")
     # conf has TxWithTimeField=false which matches actual=false for lynx chain (nTime not serialized)
-    status, detail = CppSourceInspector.check_txtime(coin, LYNX_CHECK, {"TxWithTimeField": "false"})
-    # Expected: MATCH with detail containing CURRENT_CHAIN="lynx" != "infiniloop" or "not serialized"
+    status, detail = CppSourceInspector.check_txtime(coin, src, {"TxWithTimeField": "false"})
+    # Expected: MATCH with detail naming the chain guard AND the polarity
     assert status == ParamStatus.MATCH, f"expected MATCH but got {status} detail: {detail}"
-    assert ('CURRENT_CHAIN="lynx" != "infiniloop"' in detail or "not serialized" in detail), f"detail should mention chain guard, got: {detail}"
+    assert 'CURRENT_CHAIN="lynx" == "infiniloop"' in detail, f"detail should name the chain guard, got: {detail}"
+    assert "nTime is NOT serialized" in detail, f"detail should state the not-serialized polarity, got: {detail}"
 
 
 # ---------------------------------------------------------------------------

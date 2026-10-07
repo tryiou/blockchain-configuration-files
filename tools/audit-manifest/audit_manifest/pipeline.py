@@ -293,7 +293,7 @@ def audit_params(
         if args.strict_per_version:
             report_line("  strict-per-version: worst per-version status bubbles to entry")
 
-        checkout_manager = SourceCheckoutManager(CACHE_ROOT, runner)
+        checkout_manager = SourceCheckoutManager(runner=runner)
         audit_engine = ParamAuditEngine(checkout_manager)
         param_results = {}
         total_fail = 0
@@ -301,7 +301,7 @@ def audit_params(
         for idx, coin in enumerate(manifest, 1):
             res = audit_engine.audit_coin_all_versions(coin, repo_root, args.timeout, strict=args.strict_per_version, fees_only=args.fees_only)
 
-            if not res.mode.startswith(("skipped", "no-", "clone-")):
+            if not res.mode.startswith(("skipped", "no-", "clone-", "fetch-")):
                 wpath = repo_root / "wallet-confs" / coin.wallet_conf
                 secs = SourceReader.parse_conf_sections(wpath)
                 top = secs.get("", {})
@@ -353,10 +353,10 @@ def audit_params(
                 key_name = f"{orig_key}_{suffix}"
             param_results[key_name] = res.to_dict()
 
-            if res.mode.startswith(("skipped", "no-", "clone-")):
+            if res.mode.startswith(("skipped", "no-", "clone-", "fetch-")):
                 report_line(f"[{idx}/{len(manifest)}] {coin.ticker} ({coin.ver_id}) tag={res.tag} src=- ({res.mode})")
                 for pv in res.per_version:
-                    if pv.get("mode", "").startswith(("clone-", "no-")):
+                    if pv.get("mode", "").startswith(("clone-", "fetch-", "no-")):
                         report_line(f"    -- {pv.get('version', ''):<12} wallet={pv.get('wallet_conf')} xbridge={pv.get('xbridge_conf')} ({pv.get('mode')})")
                 continue
 
