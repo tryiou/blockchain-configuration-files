@@ -15,6 +15,7 @@ Contract under test:
 Every fixture is a local ``git init`` repository under ``tmp_path`` —
 zero network, zero writes outside the test's own tmp dir.
 """
+
 import argparse
 import logging
 import os
@@ -48,8 +49,13 @@ _GIT_ENV = {
 
 def _git(*args: str, cwd: str = "") -> subprocess.CompletedProcess:
     proc = subprocess.run(
-        ["git", *args], cwd=cwd or None, env=_GIT_ENV,
-        capture_output=True, text=True, timeout=60,
+        ["git", *args],
+        cwd=cwd or None,
+        env=_GIT_ENV,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
     assert proc.returncode == 0, f"git {' '.join(args)} failed: {proc.stderr}"
     return proc
@@ -73,7 +79,9 @@ def _coin(origin: Path) -> ManifestCoin:
     # transport, so the fixtures exercise the same shallow code path as
     # a networked origin.
     return ManifestCoin(
-        ticker="TST", ver_id="tst--v1.0.0", versions=["v1.0.0"],
+        ticker="TST",
+        ver_id="tst--v1.0.0",
+        versions=["v1.0.0"],
         repo_url=origin.as_uri(),
     )
 
@@ -185,7 +193,9 @@ def test_repo_checkout_dir_accepts_fleet_style_tickers(tmp_path):
     origin = _make_origin(tmp_path, "v1.0.0")
     mgr = SourceCheckoutManager(cache_root=tmp_path / "cache")
     coin = ManifestCoin(
-        ticker="$PAC", ver_id="pac--v1.0.0", versions=["v1.0.0"],
+        ticker="$PAC",
+        ver_id="pac--v1.0.0",
+        versions=["v1.0.0"],
         repo_url=origin.as_uri(),
     )
     src, mode = mgr.resolve_source(coin, "v1.0.0", timeout=10)
@@ -280,9 +290,7 @@ def test_resolve_symlinked_folder_is_an_obstruction(tmp_path, caplog):
 
     assert src is None
     assert mode == "fetch-failed"
-    assert any("symlink" in r.getMessage() for r in caplog.records), (
-        "a symlinked folder must be named in the ERROR"
-    )
+    assert any("symlink" in r.getMessage() for r in caplog.records), "a symlinked folder must be named in the ERROR"
     assert _head(foreign) == foreign_head
     assert (foreign / "keep.txt").read_text(encoding="utf-8") == "foreign work\n"
     assert "v1.0.0" not in _git("-C", str(foreign), "tag", "--list").stdout
@@ -319,11 +327,9 @@ def test_resolve_rejects_a_tree_with_leftover_files(tmp_path):
     src2, mode2 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
     assert mode2 == "fetched", "a tree with leftovers must be repaired, never reused"
     assert src2 == src
-    assert not (src2 / "stray_from_another_tag.py").exists(), (
-        "the forced switch must leave an exact-tag tree"
-    )
+    assert not (src2 / "stray_from_another_tag.py").exists(), "the forced switch must leave an exact-tag tree"
 
-    src3, mode3 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
+    _src3, mode3 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
     assert mode3 == "reused", "after the repair the folder returns to the offline path"
 
 
@@ -354,10 +360,10 @@ def test_chain_name_is_fresh_when_head_is_unavailable(tmp_path, monkeypatch):
     src = tmp_path / "tree"
     src.mkdir()
     (src / "autogen.sh").write_text("NAME = alpha\n", encoding="utf-8")
-    assert audit.CppSourceInspector._current_chain(src) == "alpha"
+    assert cpp_mod.current_chain(src) == "alpha"
 
     (src / "autogen.sh").write_text("NAME = beta\n", encoding="utf-8")
-    assert audit.CppSourceInspector._current_chain(src) == "beta", (
+    assert cpp_mod.current_chain(src) == "beta", (
         "without a HEAD to key on, the chain name must be recomputed, never cached"
     )
 
@@ -377,16 +383,18 @@ def test_current_chain_follows_the_checked_out_tag(tmp_path):
 
     mgr = SourceCheckoutManager(cache_root=tmp_path / "cache")
     coin = ManifestCoin(
-        ticker="TST", ver_id="tst--v2.0.0", versions=["v1.0.0", "v2.0.0"],
+        ticker="TST",
+        ver_id="tst--v2.0.0",
+        versions=["v1.0.0", "v2.0.0"],
         repo_url=origin.as_uri(),
     )
     src1, mode1 = mgr.resolve_source(coin, "v2.0.0", timeout=10)
     assert mode1 == "cloned"
-    assert audit.CppSourceInspector._current_chain(src1) == "newchain"
+    assert cpp_mod.current_chain(src1) == "newchain"
 
     src2, mode2 = mgr.resolve_source(coin, "v1.0.0", timeout=10)
     assert mode2 == "fetched"
-    assert audit.CppSourceInspector._current_chain(src2) == "oldchain", (
+    assert cpp_mod.current_chain(src2) == "oldchain", (
         "the chain cache must not leak the newer tag's name into the older tag's audit"
     )
 
@@ -401,16 +409,17 @@ def test_fix_fee_margin_names_a_bad_ticker_as_such(tmp_path, caplog):
     from audit_manifest.fixes import ConfigAutoFixer
 
     coin = ManifestCoin(
-        ticker="bad/ticker", ver_id="bad--v1.0.0", versions=["v1.0.0"],
+        ticker="bad/ticker",
+        ver_id="bad--v1.0.0",
+        versions=["v1.0.0"],
         repo_url="https://example.invalid/x",
     )
     with caplog.at_level(logging.ERROR):
-        assert ConfigAutoFixer.fix_fee_margin(tmp_path, coin) == {}
+        assert ConfigAutoFixer.plan_fee_margin(tmp_path, coin) == ([], None)
     msgs = [r.getMessage() for r in caplog.records]
     assert any("invalid ticker for a checkout folder" in m for m in msgs)
     assert not any("FIX-FEES" in m and "failed:" in m for m in msgs), (
-        "the ticker-contract error must be named by its own handler, "
-        "not swallowed by the generic failure line"
+        "the ticker-contract error must be named by its own handler, not swallowed by the generic failure line"
     )
 
 
@@ -432,7 +441,7 @@ def test_fetch_failure_reports_git_stderr(tmp_path, caplog):
     origin = _make_origin(tmp_path, "v1.0.0")
     mgr = SourceCheckoutManager(cache_root=tmp_path / "cache")
     coin = _coin(origin)
-    src, mode = mgr.resolve_source(coin, "v1.0.0", timeout=10)
+    _src, mode = mgr.resolve_source(coin, "v1.0.0", timeout=10)
     assert mode == "cloned"
     caplog.clear()
 
@@ -458,9 +467,7 @@ def test_origin_gate_ignores_url_suffix_form(tmp_path):
 
     src2, mode2 = mgr.resolve_source(coin, "v1.0.0", timeout=10)
 
-    assert src2 == src and mode2 == "reused", (
-        "the same URL in another cosmetic form must not force a refetch"
-    )
+    assert src2 == src and mode2 == "reused", "the same URL in another cosmetic form must not force a refetch"
 
 
 def test_clone_recovers_when_a_branch_shadows_the_tag(tmp_path):
@@ -485,11 +492,15 @@ def test_reuse_refetches_when_the_manifest_url_changed(tmp_path):
     origin_b = _make_origin(tmp_path / "b", "v1.0.0")
     cache = tmp_path / "cache"
     coin_a = ManifestCoin(
-        ticker="TST", ver_id="tst--v1.0.0", versions=["v1.0.0"],
+        ticker="TST",
+        ver_id="tst--v1.0.0",
+        versions=["v1.0.0"],
         repo_url=origin_a.as_uri(),
     )
     coin_b = ManifestCoin(
-        ticker="TST", ver_id="tst--v1.0.0", versions=["v1.0.0"],
+        ticker="TST",
+        ver_id="tst--v1.0.0",
+        versions=["v1.0.0"],
         repo_url=origin_b.as_uri(),
     )
     mgr = SourceCheckoutManager(cache_root=cache)
@@ -503,7 +514,7 @@ def test_reuse_refetches_when_the_manifest_url_changed(tmp_path):
     stored = _git("-C", str(src2), "config", "--get", "remote.origin.url").stdout.strip()
     assert stored == origin_b.as_uri(), "the stored origin must follow the manifest URL"
 
-    src3, mode3 = mgr.resolve_source(coin_b, "v1.0.0", timeout=10)
+    _src3, mode3 = mgr.resolve_source(coin_b, "v1.0.0", timeout=10)
     assert mode3 == "reused", "once aligned, the offline path returns"
 
 
@@ -519,7 +530,7 @@ def test_gate_sees_untracked_even_if_status_config_hides_them(tmp_path, monkeypa
     assert mode == "cloned"
 
     (src / "stray.py").write_text("leftover\n", encoding="utf-8")
-    src2, mode2 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
+    _src2, mode2 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
     assert mode2 == "fetched", "the gate must see untracked files regardless of user config"
 
 
@@ -533,11 +544,11 @@ def test_repair_removes_a_nested_repo_leftover(tmp_path):
     nested = src / "vendor_leftover"
     _git("init", "-q", str(nested))  # a git repo someone dropped in
 
-    src2, mode2 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
+    _src2, mode2 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
     assert mode2 == "fetched"
     assert not nested.exists(), "the repair must clear the nested repo too"
 
-    src3, mode3 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
+    _src3, mode3 = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
     assert mode3 == "reused", "after the repair the folder returns to the offline path"
 
 
@@ -545,14 +556,49 @@ def test_param_audit_survives_a_malformed_manifest_ticker(tmp_path):
     """A bad manifest ticker degrades to a structured no-source row, not a traceback."""
     engine = audit.ParamAuditEngine(SourceCheckoutManager(cache_root=tmp_path / "cache"))
     coin = ManifestCoin(
-        ticker="a/b", ver_id="bad--v1.0.0", versions=["v1.0.0"],
-        repo_url="file:///nonexistent", wallet_conf="w.conf", xbridge_conf="x.conf",
+        ticker="a/b",
+        ver_id="bad--v1.0.0",
+        versions=["v1.0.0"],
+        repo_url="file:///nonexistent",
+        wallet_conf="w.conf",
+        xbridge_conf="x.conf",
     )
 
     res = engine.audit_version(coin, tmp_path, "v1.0.0", "w.conf", "x.conf", 10)
 
     assert res.source is None
     assert res.mode == "no-valid-ticker"
+
+
+def test_param_audit_forwards_kwargs_to_every_checker(tmp_path):
+    """The dispatch closure must forward keyword args, not just positional.
+
+    Regression guard: checker signatures are keyword-only for the flags
+    (``want_test``, ``repo_root``), so each call site forwards them as
+    keywords. A closure that accepts only ``*args`` raises TypeError on
+    the first cpp dispatch — which aborts the whole live run at the first
+    coin, while every hermetic path that exits before dispatch stays
+    green. The second assertion is the silent-degradation detector: a
+    mismatch *inside* a checker is swallowed by the closure's except and
+    turned into a WARN, so no check may come back as a checker error.
+    """
+    origin = _make_origin(tmp_path, "v1.0.0")
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "xbridge-confs").mkdir()
+    (tmp_path / "wallet-confs" / "w.conf").write_text("port=41234\nrpcport=41235\n", encoding="utf-8")
+    (tmp_path / "xbridge-confs" / "x.conf").write_text("Port=41235\n", encoding="utf-8")
+
+    engine = audit.ParamAuditEngine(SourceCheckoutManager(cache_root=tmp_path / "cache"))
+    coin = _coin(origin)
+
+    res = engine.audit_version(coin, tmp_path, "v1.0.0", "w.conf", "x.conf", 30)
+
+    ids = [c.id for c in res.checks]
+    for expected in ("PORT", "RPCPORT-SOURCE", "PREFIXES", "FEES", "STRUCT"):
+        assert expected in ids, f"{expected} never dispatched: got {ids}"
+    assert len(ids) == 16, f"expected the full cpp checker set, got {ids}"
+    for c in res.checks:
+        assert "checker error" not in c.detail, f"{c.id} degraded to a checker error: {c.detail}"
 
 
 def test_resolve_non_git_folder_never_uses_an_enclosing_repo(tmp_path, caplog):
@@ -604,9 +650,7 @@ def test_clone_failure_never_deletes_a_folder_it_did_not_create(tmp_path):
             # The winner appears between our existence check and our clone.
             target.mkdir(parents=True, exist_ok=True)
             (target / "their-work.txt").write_text("winner\n", encoding="utf-8")
-            return subprocess.CompletedProcess(
-                cmd, 128, stdout="", stderr="fatal: destination path already exists\n"
-            )
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal: destination path already exists\n")
 
     mgr = SourceCheckoutManager(cache_root=cache, runner=_RacingRunner())
     src, mode = mgr.resolve_source(_coin(origin), "v1.0.0", timeout=10)
@@ -720,3 +764,16 @@ def test_scaffold_reuses_existing_repo(tmp_path, monkeypatch):
     assert code == 1
     assert src is not None and src.is_dir(), "scaffold must not rmtree the checkout"
     assert _folders(tmp_path / "cache") == ["TST"]
+
+
+def test_chain_name_bypasses_cache_on_dirty_tree(tmp_path, monkeypatch):
+    """In-place edits keep HEAD but change the answer: never serve stale."""
+    monkeypatch.setattr(cpp_mod, "_src_head", lambda _src: "deadbeef")
+    monkeypatch.setattr(cpp_mod, "_src_dirty", lambda _src: True)
+    audit._CURRENT_CHAIN_CACHE.clear()
+    src = tmp_path / "tree"
+    src.mkdir()
+    (src / "autogen.sh").write_text("NAME = alpha\n", encoding="utf-8")
+    assert cpp_mod.current_chain(src) == "alpha"
+    (src / "autogen.sh").write_text("NAME = beta\n", encoding="utf-8")
+    assert cpp_mod.current_chain(src) == "beta"

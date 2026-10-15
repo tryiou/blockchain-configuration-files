@@ -13,6 +13,7 @@ This test pins that split by re-executing the whole package — every module
 body runs again — while the root logger is in a state
 ``basicConfig(force=True)`` would visibly undo.
 """
+
 import importlib
 import logging
 import sys
@@ -25,9 +26,9 @@ def _fresh_import():
     module bodies run again, then restores the session's canonical copy so
     the other tests keep the module object they already hold.
     """
+
     def _names():
-        return [k for k in sys.modules
-                if k == "audit_manifest" or k.startswith("audit_manifest.")]
+        return [k for k in sys.modules if k == "audit_manifest" or k.startswith("audit_manifest.")]
 
     saved = {k: sys.modules.pop(k) for k in _names()}
     try:
@@ -51,12 +52,9 @@ def test_import_does_not_configure_the_root_logger():
             "importing the audit tool changed the root logger level; "
             "log configuration must happen in main(), not at import time"
         )
-        assert root.handlers == saved_handlers, (
-            "importing the audit tool replaced the root logger handlers"
-        )
+        assert root.handlers == saved_handlers, "importing the audit tool replaced the root logger handlers"
         assert callable(module._configure_logging), (
-            "main() is expected to install the tool's handler via "
-            "_configure_logging()"
+            "main() is expected to install the tool's handler via _configure_logging()"
         )
     finally:
         root.handlers[:] = saved_handlers

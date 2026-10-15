@@ -9,10 +9,11 @@ Proof-first: generic TargetSpacing height scan must handle
 
 These must FAIL before fix (raw fallback) and PASS after generic height-gate fallback.
 """
+
 import shutil
 import tempfile
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 import audit_manifest as audit
 
@@ -44,8 +45,10 @@ def _run_effective(main_txt: str, slurp_map: dict):
                 return slurp_map[rel]
             return orig_slurp_src(src_dir, rel)
 
-        with mock.patch.object(SourceReader, "slurp", side_effect=mock_slurp), \
-             mock.patch.object(SourceReader, "slurp_src", side_effect=mock_slurp_src):
+        with (
+            mock.patch.object(SourceReader, "slurp", side_effect=mock_slurp),
+            mock.patch.object(SourceReader, "slurp_src", side_effect=mock_slurp_src),
+        ):
             val, ln, ev = CppSourceInspector._effective_blocktime(tmp, main_txt, start, end)
         return val, ln, ev
     finally:
@@ -64,7 +67,7 @@ if (nHeight > 900000) {
     nPowTargetSpacing = 45;
 }
 """
-    val, ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
+    val, _ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
     assert val == 45, f"generic height gate should pick 45 from 900000 gate, got {val} ev={ev}"
 
 
@@ -78,7 +81,7 @@ class CMainParams {
 if (nHeight > 500000) nPowTargetSpacing = 60;
 if (nHeight > 900000) nPowTargetSpacing = 45;
 """
-    val, ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
+    val, _ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
     assert val == 45, f"should pick max height 900000 ->45, got {val} ev={ev}"
 
 
@@ -90,7 +93,7 @@ class CMainParams {
     consensus.nReduceBlocktimeHeight = 845000;
 }
 """
-    val, ln, ev = _run_effective(main_txt, {})
+    val, _ln, ev = _run_effective(main_txt, {})
     assert val == 32, f"QTUM RBT should be 32, got {val} ev={ev}"
 
 
@@ -106,7 +109,7 @@ class CMainParams {
 int64_t BlocksTargetSpacing = 3*60;
  // PROOF_OF_WORK_FORK_BLOCK
 """
-    val, ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
+    val, _ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
     assert val == 180, f"UNO KGW should be 180, got {val} ev={ev}"
 
 
@@ -125,7 +128,7 @@ int GetTargetBlocksSpacing(int height) {
 }
 int stage3StartTime = 1000000;
 """
-    val, ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
+    val, _ln, ev = _run_effective(main_txt, {"src/pow.cpp": pow_cpp})
     assert val == 150, f"FIRO MTP/2 should be 150, got {val} ev={ev}"
 
 
@@ -135,5 +138,5 @@ class CMainParams {
     consensus.nPowTargetSpacing = 60;
 }
 """
-    val, ln, ev = _run_effective(main_txt, {})
+    val, _ln, ev = _run_effective(main_txt, {})
     assert val == 60, f"no gate should return raw 60, got {val} ev={ev}"

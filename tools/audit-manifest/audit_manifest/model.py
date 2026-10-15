@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, NamedTuple
 
 from .constants import FEE_REF_SIZE, FEE_SWEEP_SIZES
 
@@ -21,11 +21,6 @@ class RepoStatus(str, Enum):
     ERROR = "ERROR"
 
 
-class TagStatus(str, Enum):
-    FOUND = "FOUND"
-    MISSING = "MISSING"
-
-
 class ParamStatus(str, Enum):
     FAIL = "FAIL"
     BROKEN = "BROKEN"
@@ -35,7 +30,7 @@ class ParamStatus(str, Enum):
     UNRESOLVED = "UNRESOLVED"
     INFO = "INFO"
     SKIP = "SKIP"
-    PASS = "PASS"
+    PASS = "PASS"  # noqa: S105  # ParamStatus member name, not a credential
     MATCH = "MATCH"
 
 
@@ -62,11 +57,11 @@ PARAM_STATUS_PRECEDENCE = [
     ParamStatus.MATCH,
 ]
 
-STATUS_MARKERS: Dict[ParamStatus, str] = {
+STATUS_MARKERS: dict[ParamStatus, str] = {
     ParamStatus.FAIL: "!!",
     ParamStatus.BROKEN: "!!",
     ParamStatus.CONFLICT: "!!",
-    ParamStatus.DIFFERS: "~- ",
+    ParamStatus.DIFFERS: "~-",
     ParamStatus.WARN: "~ ",
     ParamStatus.INFO: "i ",
     ParamStatus.UNRESOLVED: "??",
@@ -75,7 +70,7 @@ STATUS_MARKERS: Dict[ParamStatus, str] = {
     ParamStatus.PASS: "ok",
 }
 
-ACTION_SEVERITY: Dict[ActionType, int] = {
+ACTION_SEVERITY: dict[ActionType, int] = {
     ActionType.OK: 0,
     ActionType.REVIEW: 1,
     ActionType.UPGRADE: 2,
@@ -111,53 +106,79 @@ class FeePolicy:
     zero_guard: str = "one_sat"
     dust_model: str = "standard"
     kb_step: int = 1000
-    step_rate: Optional[int] = None
-    fixed_step_bytes: Optional[int] = None
-    fixed_step_fee: Optional[int] = None
+    step_rate: int | None = None
+    fixed_step_bytes: int | None = None
+    fixed_step_fee: int | None = None
     dgp_live: bool = False
-    notes: Tuple[str, ...] = ()
-    evidence: Tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+    evidence: tuple[str, ...] = ()
+
+
+def _floor_round(policy: FeePolicy, rate: int, size: int) -> int:
+    fl = rate * size // 1000
+    if fl == 0 and size != 0 and rate > 0:
+        fl = rate if policy.zero_guard == "full_rate" else 1
+    return fl
+
+
+def _go_floor_round(_policy: FeePolicy, rate: int, size: int) -> int:
+    fl = (size * rate) // 1000
+    if fl == 0 and size != 0 and rate > 0:
+        fl = rate
+    return fl
+
+
+def _literal_flat_round(_policy: FeePolicy, rate: int, size: int) -> int:
+    fl = rate * size // 1000
+    if fl == 0 and size != 0 and rate > 0:
+        fl = rate
+    return fl
+
+
+def _ceil_round(_policy: FeePolicy, rate: int, size: int) -> int:
+    fl = (rate * size + 999) // 1000
+    if fl == 0 and size != 0 and rate > 0:
+        fl = 1
+    return fl
+
+
+def _ceil_step_round(policy: FeePolicy, _rate: int, size: int) -> int:
+    if policy.step_rate is None:
+        raise ValueError("ceil_step policy without step_rate")
+    n_steps = (size + policy.kb_step - 1) // policy.kb_step if size else 0
+    fee = policy.step_rate * n_steps
+    if fee == 0 and size != 0 and policy.step_rate > 0:
+        fee = 1
+    return fee
+
+
+def _fixed_steps_round(policy: FeePolicy, _rate: int, size: int) -> int:
+    if policy.fixed_step_bytes is None or policy.fixed_step_fee is None:
+        raise ValueError("fixed_steps policy without step params")
+    return (1 + size // policy.fixed_step_bytes) * policy.fixed_step_fee
+
+
+# One exact handler per rounding shape. An unhandled shape raises in
+# chain_floor rather than defaulting: a wrong floor is a fund-loss risk.
+_ROUNDERS: dict[str, Callable[[FeePolicy, int, int], int]] = {
+    "floor": _floor_round,
+    "go_floor": _go_floor_round,
+    "literal_flat": _literal_flat_round,
+    "ceil": _ceil_round,
+    "ceil_step": _ceil_step_round,
+    "fixed_steps": _fixed_steps_round,
+}
 
 
 def chain_floor(policy: FeePolicy, rate: int, size: int) -> int:
     """Exact minimum fee (satoshis) the coin daemon requires for `size` bytes."""
-    r = policy.rounding
-    if r == "floor":
-        fl = rate * size // 1000
-        if fl == 0 and size != 0 and rate > 0:
-            fl = rate if policy.zero_guard == "full_rate" else 1
-        return fl
-    if r == "go_floor":
-        fl = (size * rate) // 1000
-        if fl == 0 and size != 0 and rate > 0:
-            fl = rate
-        return fl
-    if r == "literal_flat":
-        fl = rate * size // 1000
-        if fl == 0 and size != 0 and rate > 0:
-            fl = rate
-        return fl
-    if r == "ceil":
-        fl = (rate * size + 999) // 1000
-        if fl == 0 and size != 0 and rate > 0:
-            fl = 1
-        return fl
-    if r == "ceil_step":
-        if policy.step_rate is None:
-            raise ValueError("ceil_step policy without step_rate")
-        n_steps = (size + policy.kb_step - 1) // policy.kb_step if size else 0
-        fee = policy.step_rate * n_steps
-        if fee == 0 and size != 0 and policy.step_rate > 0:
-            fee = 1
-        return fee
-    if r == "fixed_steps":
-        if policy.fixed_step_bytes is None or policy.fixed_step_fee is None:
-            raise ValueError("fixed_steps policy without step params")
-        return (1 + size // policy.fixed_step_bytes) * policy.fixed_step_fee
-    raise ValueError(f"chain_floor: unhandled rounding {r!r} (no silent default)")
+    rounder = _ROUNDERS.get(policy.rounding)
+    if rounder is None:
+        raise ValueError(f"chain_floor: unhandled rounding {policy.rounding!r} (no silent default)")
+    return rounder(policy, rate, size)
 
 
-def strict_fees(policy: FeePolicy, rate: int) -> Tuple[int, int]:
+def strict_fees(policy: FeePolicy, rate: int) -> tuple[int, int]:
     """Exact (MinTxFee, FeePerByte): smallest values clearing the chain gate.
 
     MinTxFee = gate at the 452 B reference size. FeePerByte = smallest integer
@@ -169,12 +190,11 @@ def strict_fees(policy: FeePolicy, rate: int) -> Tuple[int, int]:
         gate = chain_floor(policy, rate, size)
         if gate > mtf:
             need = (gate + size - 1) // size
-            if need > fpb:
-                fpb = need
+            fpb = max(fpb, need)
     return int(mtf), int(fpb)
 
 
-def recommended_fees(policy: FeePolicy, rate: int) -> Tuple[int, int]:
+def recommended_fees(policy: FeePolicy, rate: int) -> tuple[int, int]:
     """Deterministic THE fees — strict-exact per-coin chain gates, safe for ANY
     n (1 to ~520 inputs, 100kB). Single source for check/fix/scaffold."""
     return strict_fees(policy, rate)
@@ -183,6 +203,7 @@ def recommended_fees(policy: FeePolicy, rate: int) -> Tuple[int, int]:
 @dataclass
 class ManifestCoin:
     """Represents a single coin definition from manifest-latest.json."""
+
     ticker: str
     ver_id: str
     blockchain: str = ""
@@ -192,14 +213,14 @@ class ManifestCoin:
     dir_name_mac: str = ""
     dir_name_win: str = ""
     repo_url: str = ""
-    versions: List[str] = field(default_factory=list)
+    versions: list[str] = field(default_factory=list)
     wallet_conf: str = ""
     xbridge_conf: str = ""
     daemon_family: str = "btc"
     daemon_stem: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ManifestCoin:
+    def from_dict(cls, data: dict[str, Any]) -> ManifestCoin:
         return cls(
             ticker=data.get("ticker", ""),
             ver_id=data.get("ver_id", ""),
@@ -217,8 +238,8 @@ class ManifestCoin:
             daemon_stem=data.get("daemon_stem", ""),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "blockchain": self.blockchain,
             "ticker": self.ticker,
             "ver_id": self.ver_id,
@@ -241,7 +262,7 @@ class ManifestCoin:
     def is_btcd(self) -> bool:
         return self.daemon_family.lower() == "btcd"
 
-    def expected_tags(self) -> List[str]:
+    def expected_tags(self) -> list[str]:
         """Declared versions are the only held tags (manifest field contract).
 
         The manifest field table in this repository's root ``README.md``
@@ -259,36 +280,66 @@ class ManifestCoin:
         return sorted(set(self.versions))
 
 
+class CheckResult(NamedTuple):
+    """A checker's verdict: status, detail, and the optional fixable kind.
+
+    Checkers may return the 2-tuple; the NamedTuple default keeps the
+    dispatch boundary the single place the arity is resolved.
+    """
+
+    status: ParamStatus
+    detail: str
+    fixable: str | None = None
+
+
+# What checker functions declare: (status, detail) or (status, detail,
+# fixable kind). ``add_check`` normalizes both into a CheckResult.
+CheckerTuple = tuple[ParamStatus, str] | tuple[ParamStatus, str, str | None]
+
+
 @dataclass
 class CheckFinding:
-    """Individual rule verification result."""
+    """Individual rule verification result.
+
+    ``fixable`` names the auto-fix kind this finding authorizes (see
+    ``ConfigAutoFixer`` in fixes.py), set by the checker that produced
+    the finding. The fix dispatch keys off this field and never off the
+    human-readable ``detail``, so reworded messages cannot silently
+    disable a fix.
+    """
+
     id: str
     status: ParamStatus
     detail: str
+    fixable: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {"id": self.id, "status": self.status.value, "detail": self.detail}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"id": self.id, "status": self.status.value, "detail": self.detail}
+        if self.fixable is not None:
+            d["fixable"] = self.fixable
+        return d
 
 
 @dataclass
 class ParamAuditResult:
     """Aggregated audit result for a coin entry or specific version."""
-    tag: Optional[str]
-    source: Optional[str]
+
+    tag: str | None
+    source: str | None
     mode: str
-    checks: List[CheckFinding] = field(default_factory=list)
+    checks: list[CheckFinding] = field(default_factory=list)
     fail: int = 0
     differs: int = 0
     warn: int = 0
     unresolved: int = 0
     conflict: int = 0
-    version: Optional[str] = None
-    wallet_conf: Optional[str] = None
-    xbridge_conf: Optional[str] = None
-    per_version: List[Dict[str, Any]] = field(default_factory=list)
+    version: str | None = None
+    wallet_conf: str | None = None
+    xbridge_conf: str | None = None
+    per_version: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
-        res: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        res: dict[str, Any] = {
             "tag": self.tag,
             "source": self.source,
             "mode": self.mode,

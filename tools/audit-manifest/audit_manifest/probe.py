@@ -14,7 +14,6 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
 
 from .constants import (
     _CHANGELOG_CACHE_DIRNAME,
@@ -23,18 +22,23 @@ from .constants import (
 from .model import RepoStatus
 from .util import _detect_mandatory_hf, _parse_github_owner_repo, sanitize_tag
 
+# Git and HTTP outcomes the probe interprets.
+_GIT_FATAL_EXIT = 128
+_HTTP_OK = 200
+_HTTP_NOT_FOUND = 404
+
 
 class SystemCommandRunner:
     """Executes external processes with retry mechanisms and environment management."""
 
     @staticmethod
     def run(
-        cmd: List[str],
+        cmd: list[str],
         timeout: int,
         retries: int = 2,
-        env_extra: Optional[Dict[str, str]] = None,
-        cwd: Optional[Union[str, Path]] = None,
-    ) -> Optional[subprocess.CompletedProcess[str]]:
+        env_extra: dict[str, str] | None = None,
+        cwd: str | Path | None = None,
+    ) -> subprocess.CompletedProcess[str] | None:
         env = dict(os.environ)
         if env_extra:
             env.update(env_extra)
@@ -49,6 +53,7 @@ class SystemCommandRunner:
                     timeout=timeout,
                     env=env,
                     cwd=str(cwd) if cwd else None,
+                    check=False,  # callers inspect returncode themselves (probe_tags etc.)
                 )
             except subprocess.TimeoutExpired:
                 attempt += 1
@@ -64,10 +69,10 @@ class SystemCommandRunner:
 class RemoteProbeService:
     """Probes remote git repositories using smart-HTTP protocol and HTTP headers."""
 
-    def __init__(self, runner: SystemCommandRunner = SystemCommandRunner()):
-        self.runner = runner
+    def __init__(self, runner: SystemCommandRunner | None = None):
+        self.runner = runner or SystemCommandRunner()
 
-    def probe_redirect(self, url: str, timeout: int) -> Optional[str]:
+    def probe_redirect(self, url: str, timeout: int) -> str | None:
         """Detect HTTP 301/302 redirects without GitHub REST API."""
         proc = self.runner.run(
             ["curl", "-sI", "-o", "/dev/null", "-w", "%{redirect_url}", url],
@@ -80,7 +85,7 @@ class RemoteProbeService:
             return target
         return None
 
-    def probe_tags(self, url: str, timeout: int) -> Tuple[RepoStatus, Optional[Set[str]]]:
+    def probe_tags(self, url: str, timeout: int) -> tuple[RepoStatus, set[str] | None]:
         """Query remote refs using git ls-remote."""
         proc = self.runner.run(
             ["git", "ls-remote", "--tags", url],
@@ -89,12 +94,12 @@ class RemoteProbeService:
         )
         if proc is None:
             return RepoStatus.UNKNOWN, None
-        if proc.returncode == 128:
+        if proc.returncode == _GIT_FATAL_EXIT:
             return RepoStatus.DEAD, None
         if proc.returncode != 0:
             return RepoStatus.ERROR, None
 
-        tags: Set[str] = set()
+        tags: set[str] = set()
         for line in proc.stdout.splitlines():
             if "refs/tags/" not in line:
                 continue
@@ -104,7 +109,7 @@ class RemoteProbeService:
             tags.add(ref)
         return RepoStatus.ALIVE, tags
 
-    def probe_tag_dates(self, url: str, selected: Set[str], timeout: int) -> Optional[Dict[str, str]]:
+    def probe_tag_dates(self, url: str, selected: set[str], timeout: int) -> dict[str, str] | None:
         """Fetch creatordate for selected tags using a single shallow bare fetch."""
         if not selected:
             return {}
@@ -117,9 +122,17 @@ class RemoteProbeService:
 
             refspecs = [f"+refs/tags/{t}:refs/tags/{t}" for t in sorted(selected)]
             fetch_cmd = [
-                "git", "-C", tmp_dir, "fetch", "-q", "--depth=1",
-                "--filter=tree:0", "--no-tags", url
-            ] + refspecs
+                "git",
+                "-C",
+                tmp_dir,
+                "fetch",
+                "-q",
+                "--depth=1",
+                "--filter=tree:0",
+                "--no-tags",
+                url,
+                *refspecs,
+            ]
 
             fetch = self.runner.run(fetch_cmd, timeout, env_extra={"GIT_TERMINAL_PROMPT": "0"})
             if fetch is None or fetch.returncode != 0:
@@ -127,7 +140,10 @@ class RemoteProbeService:
 
             fmt = self.runner.run(
                 [
-                    "git", "-C", tmp_dir, "for-each-ref",
+                    "git",
+                    "-C",
+                    tmp_dir,
+                    "for-each-ref",
                     "--format=%(refname) %(creatordate:iso8601)",
                     "refs/tags",
                 ],
@@ -136,7 +152,7 @@ class RemoteProbeService:
             if fmt is None or fmt.returncode != 0:
                 return None
 
-            dates: Dict[str, str] = {}
+            dates: dict[str, str] = {}
             for line in fmt.stdout.splitlines():
                 if "refs/tags/" in line:
                     ref, date = line.split(" ", 1)
@@ -147,7 +163,7 @@ class RemoteProbeService:
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    def probe_tag_annotation(self, url: str, tag: str, timeout: int) -> Optional[str]:
+    def probe_tag_annotation(self, url: str, tag: str, timeout: int) -> str | None:
         """Fetch annotated tag message via shallow bare fetch + for-each-ref."""
         tmp_dir = tempfile.mkdtemp()
         try:
@@ -172,7 +188,13 @@ class RemoteProbeService:
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    def probe_github_release(self, url: str, tag: str, timeout: int, cache_root: Optional[Path] = None) -> Optional[str]:
+    def probe_github_release(  # noqa: C901, PLR0911, PLR0912  # release prober: one return per probe outcome
+        self,
+        url: str,
+        tag: str,
+        timeout: int,
+        cache_root: Path | None = None,
+    ) -> str | None:
         """Fetch GitHub Releases body via api.github.com, cached in .cache/audit-manifest/.changelog_cache.
         Stdlib-only, no token. The cache is ephemeral by design (gitignored
         scratch): purge it to force a re-probe."""
@@ -180,8 +202,8 @@ class RemoteProbeService:
         if not parsed:
             return None
         owner, repo = parsed
-        cache_dir: Optional[Path] = None
-        cache_path: Optional[Path] = None
+        cache_dir: Path | None = None
+        cache_path: Path | None = None
         if cache_root is not None:
             try:
                 cache_dir = cache_root / _CHANGELOG_CACHE_DIRNAME
@@ -194,8 +216,9 @@ class RemoteProbeService:
                         body = data.get("body")
                         if isinstance(body, str) and body.strip():
                             return body
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # A corrupt/partial cache entry is scratch — re-probe instead of failing.
+                        logger.debug("ignoring unreadable release cache %s: %s", cache_path, e)
             except Exception:
                 cache_path = None
         api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}"
@@ -210,15 +233,14 @@ class RemoteProbeService:
             body_part, code_part = out.rsplit("\n", 1)
         else:
             body_part, code_part = out, ""
-        try:
-            code = int(code_part.strip()) if code_part.strip().isdigit() else -1
-        except Exception:
-            code = -1
+        # isdigit() guards int(); the previous try/except was unreachable dead code.
+        code = int(code_part.strip()) if code_part.strip().isdigit() else -1
         if code in (429, 403):
+            logger.warning("GitHub release probe rate-limited (%s) for %s @ %s — changelog degrades", code, url, tag)
             return None
-        if code == 404:
+        if code == _HTTP_NOT_FOUND:
             return None
-        if code != 200:
+        if code != _HTTP_OK:
             return None
         try:
             data = json.loads(body_part) if body_part else {}
@@ -236,14 +258,21 @@ class RemoteProbeService:
                 cache_path.write_text(
                     json.dumps({"body": body, "tag": tag, "url": api_url}, indent=2), encoding="utf-8"
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                # Cache writes are best-effort; a read-only cache dir degrades to re-probing.
+                logger.debug("release cache write failed for %s: %s", cache_path, e)
         return body
 
-    def probe_changelog(self, url: str, tag: str, timeout: int, cache_root: Optional[Path] = None) -> Optional[Tuple[str, str]]:
+    def probe_changelog(
+        self,
+        url: str,
+        tag: str,
+        timeout: int,
+        cache_root: Path | None = None,
+    ) -> tuple[str, str] | None:
         """Hybrid: check both tag annotation and GitHub Releases; prefer mandatory hit."""
-        tag_txt: Optional[str] = None
-        gh_body: Optional[str] = None
+        tag_txt: str | None = None
+        gh_body: str | None = None
         try:
             tag_txt = self.probe_tag_annotation(url, tag, timeout)
         except Exception:

@@ -2,7 +2,9 @@
 
 Port facts are collected wallet-wide (P2P/RPC/xbridge, main + [test]) and
 reallocation picks the nearest free offset while preserving the P2P→RPC delta
-so a coin keeps a predictable pair.
+so a coin keeps a predictable pair. Allocation merges namespaces into one
+used set: one host, one TCP domain, so a main port never lands on any coin's
+test port and p2p never lands on any rpc.
 """
 
 from __future__ import annotations
@@ -11,25 +13,45 @@ import argparse
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from .checkout import SourceReader
 from .constants import logger
 from .model import ManifestCoin
 from .reporting import report_line
-from .util import norm_port_value, plan_entry, repo_relative
+from .util import iter_conf_lines, norm_port_value, plan_entry, repo_relative
+
+# Privileged-port floor and ceiling for reassignment candidates. The
+# near-source walk keeps a coin's port neighbourhood first and only then
+# falls back to the whole range; the pair search stops one short of the
+# ceiling so a +1 delta peer still fits.
+_PORT_MIN = 1024
+_PORT_MAX = 65535
+_NEAR_OFFSET_START = 100
+_NEAR_OFFSET_LIMIT = 50000
+_PAIR_SEARCH_MAX = _PORT_MAX - 1
+
+# The port namespaces the fleet tracks, in report order, and their labels.
+PORT_KINDS: tuple[str, ...] = ("p2p", "rpc", "xbridge", "test_p2p", "test_rpc")
+PORT_LABEL: dict[str, str] = {
+    "p2p": "P2P",
+    "rpc": "RPC",
+    "xbridge": "XBRIDGE",
+    "test_p2p": "TEST-P2P",
+    "test_rpc": "TEST-RPC",
+}
 
 
 class PortCollisionManager:
     """Detects and reallocates colliding P2P and RPC ports across the entire fleet."""
 
     @staticmethod
-    def collect_port_collisions(manifest: List[ManifestCoin], repo_root: Path) -> Dict[str, Dict[int, List[str]]]:
-        p2p: Dict[int, List[str]] = defaultdict(list)
-        rpc: Dict[int, List[str]] = defaultdict(list)
-        xbp: Dict[int, List[str]] = defaultdict(list)
-        test_p2p: Dict[int, List[str]] = defaultdict(list)
-        test_rpc: Dict[int, List[str]] = defaultdict(list)
+    def collect_port_collisions(manifest: list[ManifestCoin], repo_root: Path) -> dict[str, dict[int, list[str]]]:
+        p2p: dict[int, list[str]] = defaultdict(list)
+        rpc: dict[int, list[str]] = defaultdict(list)
+        xbp: dict[int, list[str]] = defaultdict(list)
+        test_p2p: dict[int, list[str]] = defaultdict(list)
+        test_rpc: dict[int, list[str]] = defaultdict(list)
 
         for coin in manifest:
             ticker = coin.ticker or "?"
@@ -65,118 +87,117 @@ class PortCollisionManager:
         }
 
     @staticmethod
-    def write_wallet_key(
+    def plan_wallet_key(
         wpath: Path,
         key: str,
         new_val: int,
-        dry_run: bool = False,
-        repo_root: Optional[Path] = None,
-    ) -> Dict[str, Any]:
+        repo_root: Path | None = None,
+    ) -> tuple:
         try:
             txt = SourceReader.slurp(wpath)
             if txt is None:
-                return {}
-            lines = txt.splitlines()
-            out: List[str] = []
-            in_test = False
-            replaced = False
-            old_val: Optional[str] = None
-            for line in lines:
-                stripped = line.strip()
-                if stripped.lower().startswith("[test]"):
-                    in_test = True
-                elif stripped.startswith("[") and stripped.endswith("]"):
-                    in_test = False
-                if not in_test and not replaced and re.match(rf"^\s*{re.escape(key)}\s*=", line, flags=re.I):
+                return [], None
+            old_val: str | None = None
+            for _lineno, line, in_test in iter_conf_lines(txt):
+                if not in_test and re.match(rf"^\s*{re.escape(key)}\s*=", line, flags=re.I):
                     old_val = line.split("=", 1)[1].strip() if "=" in line else None
-                    out.append(f"{key}={new_val}")
-                    replaced = True
-                else:
-                    out.append(line)
-            if not replaced:
-                out.append(f"{key}={new_val}")
-            if not dry_run:
-                wpath.write_text("\n".join(out) + "\n", encoding="utf-8")
-            return plan_entry(
-                repo_relative(wpath, repo_root), key, old_val, str(new_val),
-                f"reassign {key} to a free port",
-                "port", applied=not dry_run,
-            )
+                    break
+            return [
+                plan_entry(
+                    repo_relative(wpath, repo_root),
+                    key,
+                    old_val,
+                    str(new_val),
+                    f"reassign {key} to a free port",
+                    "port",
+                    applied=False,
+                )
+            ], None
         except OSError as e:
-            logger.error("Failed writing wallet key to %s: %s", wpath, e)
-            return {}
+            logger.error("Failed reading wallet key from %s: %s", wpath, e)
+            return [], None
 
     @staticmethod
-    def write_xbridge_port(
+    def plan_xbridge_port(
         xpath: Path,
         new_val: int,
-        dry_run: bool = False,
-        repo_root: Optional[Path] = None,
-    ) -> Dict[str, Any]:
+        repo_root: Path | None = None,
+    ) -> tuple:
         try:
             txt = SourceReader.slurp(xpath)
             if txt is None:
-                return {}
-            lines = txt.splitlines()
-            out: List[str] = []
-            replaced = False
-            old_val: Optional[str] = None
-            for line in lines:
-                if not replaced and re.match(r"^\s*Port\s*=", line, flags=re.I):
+                return [], None
+            old_val: str | None = None
+            for line in txt.splitlines():
+                if re.match(r"^\s*Port\s*=", line, flags=re.I):
                     old_val = line.split("=", 1)[1].strip() if "=" in line else None
-                    out.append(f"Port={new_val}")
-                    replaced = True
-                else:
-                    out.append(line)
-            if not replaced:
-                out.append(f"Port={new_val}")
-            if not dry_run:
-                xpath.write_text("\n".join(out) + "\n", encoding="utf-8")
-            return plan_entry(
-                repo_relative(xpath, repo_root), "Port", old_val, str(new_val),
-                "reassign xbridge Port to match the new wallet rpcport",
-                "port", applied=not dry_run,
-            )
+                    break
+            return [
+                plan_entry(
+                    repo_relative(xpath, repo_root),
+                    "Port",
+                    old_val,
+                    str(new_val),
+                    "reassign xbridge Port to match the new wallet rpcport",
+                    "port",
+                    applied=False,
+                )
+            ], None
         except OSError as e:
-            logger.error("Failed writing xbridge port to %s: %s", xpath, e)
-            return {}
+            logger.error("Failed reading xbridge Port from %s: %s", xpath, e)
+            return [], None
 
     @staticmethod
-    def find_free_single(src: int, used_p2p: Set[int], used_rpc: Set[int], exclude_self: Optional[int] = None) -> Optional[int]:
+    def find_free_single(
+        src: int,
+        used_p2p: set[int],
+        used_rpc: set[int],
+        exclude_self: int | None = None,
+    ) -> int | None:
         used = used_p2p | used_rpc
         if exclude_self is not None:
             used = set(used) - {exclude_self}
-        for off in range(100, 50000):
+        for off in range(_NEAR_OFFSET_START, _NEAR_OFFSET_LIMIT):
             cand = src + off
-            if 1024 <= cand <= 65535 and cand not in used:
+            if _PORT_MIN <= cand <= _PORT_MAX and cand not in used:
                 return cand
-        for cand in range(50000, 65535):
-            if cand not in used:
+        for cand in range(_NEAR_OFFSET_LIMIT, _PORT_MAX):
+            if cand != src and cand not in used:
                 return cand
         return None
 
     @staticmethod
-    def find_free_pair(src_p2p: int, src_rpc: int, used_p2p: Set[int], used_rpc: Set[int]) -> Tuple[Optional[int], Optional[int]]:
+    def find_free_pair(
+        src_p2p: int,
+        src_rpc: int,
+        used_p2p: set[int],
+        used_rpc: set[int],
+    ) -> tuple[int | None, int | None]:
         used = used_p2p | used_rpc
         delta = src_rpc - src_p2p if src_rpc != src_p2p else 1
-        for off in range(100, 50000):
+        for off in range(_NEAR_OFFSET_START, _NEAR_OFFSET_LIMIT):
             cand_p2p = src_p2p + off
             cand_rpc = cand_p2p + delta
-            if 1024 <= cand_p2p <= 65535 and 1024 <= cand_rpc <= 65535:
-                if cand_p2p not in used and cand_rpc not in used and cand_p2p != cand_rpc:
-                    return cand_p2p, cand_rpc
-        for cand_p2p in range(50000, 65534):
+            if (
+                _PORT_MIN <= cand_p2p <= _PORT_MAX
+                and _PORT_MIN <= cand_rpc <= _PORT_MAX
+                and cand_p2p not in used
+                and cand_rpc not in used
+                and cand_p2p != cand_rpc
+            ):
+                return cand_p2p, cand_rpc
+        for cand_p2p in range(_NEAR_OFFSET_LIMIT, _PAIR_SEARCH_MAX):
             cand_rpc = cand_p2p + delta
-            if cand_rpc <= 65535 and cand_p2p not in used and cand_rpc not in used and cand_p2p != cand_rpc:
+            if cand_rpc <= _PORT_MAX and cand_p2p not in used and cand_rpc not in used and cand_p2p != cand_rpc:
                 return cand_p2p, cand_rpc
         return None, None
 
 
 def collect_port_matrix(
     args: argparse.Namespace,
-    full_manifest: List[ManifestCoin],
+    full_manifest: list[ManifestCoin],
     repo_root: Path,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build the fleet port-collision matrix and print the fleet report.
 
     Always computed for the full fleet, never filtered by --ticker, so a
@@ -190,11 +211,11 @@ def collect_port_matrix(
     if not args.param_check:
         if fleet_summary:
             report_line("\n=== PORT COLLISIONS (fleet) ===")
-            for kind in ("p2p", "rpc", "xbridge", "test_p2p", "test_rpc"):
+            for kind in PORT_KINDS:
                 dup = fleet_summary.get(kind)
                 if not dup:
                     continue
-                label = {"p2p": "P2P", "rpc": "RPC", "xbridge": "XBRIDGE", "test_p2p": "TEST-P2P", "test_rpc": "TEST-RPC"}[kind]
+                label = PORT_LABEL[kind]
                 for port in sorted(dup):
                     report_line(f"  {label} {port} : {', '.join(dup[port])}")
         else:

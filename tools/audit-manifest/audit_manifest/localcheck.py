@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any
 
 from .checkout import SourceReader
 from .model import ManifestCoin
@@ -20,7 +20,7 @@ class ManifestCrossChecker:
     """Validates local configuration files against manifest specifications."""
 
     @staticmethod
-    def base_j2_version_map(ticker: str, repo_root: Path) -> Dict[str, Any]:
+    def base_j2_version_map(ticker: str, repo_root: Path) -> dict[str, Any]:
         try:
             path = repo_root / "autobuild" / "configs" / f"{ticker.lower()}.base.j2"
             txt = SourceReader.slurp(path)
@@ -38,7 +38,7 @@ class ManifestCrossChecker:
             return {}
 
     @classmethod
-    def conf_pair_for_version(cls, coin: ManifestCoin, version: str, repo_root: Path) -> Tuple[str, str]:
+    def conf_pair_for_version(cls, coin: ManifestCoin, version: str, repo_root: Path) -> tuple[str, str]:
         m = cls.base_j2_version_map(coin.ticker, repo_root)
         vd = m.get(version)
         if vd and vd.get("wallet_conf") and vd.get("xbridge_conf"):
@@ -46,16 +46,16 @@ class ManifestCrossChecker:
         return coin.wallet_conf, coin.xbridge_conf
 
     @classmethod
-    def local_crosscheck(cls, manifest_path: Path, manifest: List[ManifestCoin]) -> Dict[str, Any]:
+    def local_crosscheck(cls, manifest_path: Path, manifest: list[ManifestCoin]) -> dict[str, Any]:
         repo_root = manifest_path.parent
         wc_dir = repo_root / "wallet-confs"
         xc_dir = repo_root / "xbridge-confs"
         j2_dir = repo_root / "autobuild" / "configs"
 
-        expected: Set[str] = set()
-        missing_wallet: List[Tuple[str, str, str]] = []
-        missing_xbridge: List[Tuple[str, str, str]] = []
-        missing_j2: List[str] = []
+        expected: set[str] = set()
+        missing_wallet: list[tuple[str, str, str]] = []
+        missing_xbridge: list[tuple[str, str, str]] = []
+        missing_j2: list[str] = []
 
         for e in manifest:
             ver_id = e.ver_id
@@ -79,13 +79,11 @@ class ManifestCrossChecker:
                 missing_j2.append(e.ticker)
 
         expected_lower = {s.lower() for s in expected if s}
-        orphans: Dict[str, List[str]] = {}
+        orphans: dict[str, list[str]] = {}
         for dname in ("wallet-confs", "xbridge-confs"):
             full = repo_root / dname
             stems = [f.stem for f in full.iterdir() if f.is_file() and f.suffix == ".conf"]
-            orphans[dname] = sorted(
-                f for f in stems if f.lower() not in expected_lower and not f.endswith(".conf.tmp")
-            )
+            orphans[dname] = sorted(f for f in stems if f.lower() not in expected_lower and not f.endswith(".conf.tmp"))
 
         return {
             "missing_wallet_conf": missing_wallet,
@@ -95,7 +93,7 @@ class ManifestCrossChecker:
         }
 
 
-def crosscheck_local(manifest_path: Path, full_manifest: List[ManifestCoin]) -> Dict[str, Any]:
+def crosscheck_local(manifest_path: Path, full_manifest: list[ManifestCoin]) -> dict[str, Any]:
     """Print and return the on-disk conf cross-check. No network involved."""
     report_line("\n=== LOCAL CROSS-CHECK ===")
     local = ManifestCrossChecker.local_crosscheck(manifest_path, full_manifest)

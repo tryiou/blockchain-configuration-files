@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from .constants import _PRERELEASE_RE
 from .model import ActionType, ManifestCoin, RepoStatus
@@ -18,7 +18,7 @@ class VersionEngine:
     """Pure functions for version string evaluation, semver sorting, and fossil detection."""
 
     @staticmethod
-    def parse_version(tag: str) -> Optional[Tuple[int, ...]]:
+    def parse_version(tag: str) -> tuple[int, ...] | None:
         """Return numeric tuple for dotted-numeric version tag, else None."""
         s = tag.strip()
         m = re.match(r"^[^\d]*(\d+(?:\.\d+)*)", s)
@@ -28,7 +28,7 @@ class VersionEngine:
         # hash guard: single-component (no dot) + suffix isalpha + no leading v
         # keeps da839021c -> None while preserving v22-final -> (22,)
         if "." not in num_str:
-            suffix = s[m.end():]
+            suffix = s[m.end() :]
             if suffix and suffix.isalpha() and not s.lower().startswith("v"):
                 return None
         return tuple(int(p) for p in num_str.split("."))
@@ -42,26 +42,27 @@ class VersionEngine:
         return bool(_PRERELEASE_RE.search(m.group(1)))
 
     @classmethod
-    def stable_tags(cls, tags: Optional[Set[str]]) -> Optional[Set[str]]:
+    def stable_tags(cls, tags: set[str] | None) -> set[str] | None:
         """Subset of tags excluding pre-releases."""
         if tags is None:
             return None
         return {t for t in tags if not cls.is_prerelease(t)}
 
     @classmethod
-    def max_version_tag(cls, tags: Any) -> Optional[str]:
-        """Highest numeric-version tag in iterable, resolving ties lexically."""
-        best, best_p = None, None
+    def max_version_tag(cls, tags: Any) -> str | None:
+        """Highest numeric-version tag, ties resolve to max lexical."""
+        best: str | None = None
+        best_p = None
         for t in sorted(tags or ()):
             p = cls.parse_version(t)
             if p is None:
                 continue
-            if best_p is None or p > best_p:
+            if best_p is None or p > best_p or (p == best_p and best is not None and t > best):
                 best, best_p = t, p
         return best
 
     @classmethod
-    def detect_newer(cls, remote_tags: Optional[Set[str]], coins: List[ManifestCoin]) -> Tuple[List[str], List[str]]:
+    def detect_newer(cls, remote_tags: set[str] | None, coins: list[ManifestCoin]) -> tuple[list[str], list[str]]:
         """Split upstream tags into newer_same and newer_alt relative to held tags."""
         if remote_tags is None:
             return [], []
@@ -69,7 +70,7 @@ class VersionEngine:
         if not stable:
             return [], []
 
-        held_tags: Set[str] = set()
+        held_tags: set[str] = set()
         for coin in coins:
             held_tags.update(coin.expected_tags())
 
@@ -81,8 +82,8 @@ class VersionEngine:
         max_held = max(valid_held)
         max_len = len(max_held)
 
-        newer_same: List[str] = []
-        newer_alt: List[str] = []
+        newer_same: list[str] = []
+        newer_alt: list[str] = []
 
         for t in sorted(stable):
             p = cls.parse_version(t)
@@ -93,11 +94,12 @@ class VersionEngine:
         return newer_same, newer_alt
 
 
-def classify_action(
+def classify_action(  # noqa: PLR0911  # action classifier: one return per repo-state verdict
     status: RepoStatus,
-    missing: List[str],
-    newer_same: List[str],
-    newer_alt: List[str],
+    missing: list[str],
+    newer_same: list[str],
+    newer_alt: list[str],
+    *,
     stale: bool,
 ) -> ActionType:
     """Determine operational triage action for repository."""
@@ -107,16 +109,16 @@ def classify_action(
         return ActionType.MOVED
     if status in (RepoStatus.UNKNOWN, RepoStatus.ERROR):
         return ActionType.UNKNOWN
+    if missing:
+        return ActionType.REVIEW
     if newer_same:
         return ActionType.UPGRADE
-    if newer_alt or missing or stale:
+    if newer_alt or stale:
         return ActionType.REVIEW
     return ActionType.OK
 
 
-def _newest_and_stale(
-    tag_dates: Dict[str, str], stale_years: float
-) -> Tuple[Optional[str], Optional[str], bool]:
+def _newest_and_stale(tag_dates: dict[str, str], stale_years: float) -> tuple[str | None, str | None, bool]:
     """Derive newest tag/date and stale flag from tag_dates (DRY helper)."""
     if not tag_dates:
         return None, None, False
@@ -132,16 +134,16 @@ def _newest_and_stale(
     return newest_tag, newest_date, stale
 
 
-def action_reason(
+def action_reason(  # noqa: PLR0913  # one input per quoted fact
     action: ActionType,
-    status: RepoStatus,
-    missing: List[str],
-    newer_same: List[str],
-    newer_alt: List[str],
+    missing: list[str],
+    newer_same: list[str],
+    newer_alt: list[str],
+    *,
     stale: bool,
-    new_home: Optional[str],
+    new_home: str | None,
 ) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     if action == ActionType.DEAD:
         parts.append("repo unreachable")
     if action == ActionType.MOVED and new_home:
@@ -163,7 +165,7 @@ def action_reason(
 
 def build_update_version_names(
     ticker: str, old_ver_id: str, old_wc: str, old_xc: str, target: str
-) -> Tuple[str, str, str]:
+) -> tuple[str, str, str]:
     """Derive (new_ver_id, new_wallet_conf, new_xbridge_conf) for --update-versions.
 
     Each conf keeps its OWN filename stem (wallet stem from old_wc, xbridge
@@ -186,7 +188,7 @@ def build_update_version_names(
     return new_ver_id, new_wc, new_xc
 
 
-def apply_additive_bump(item: Dict[str, Any], target: str) -> bool:
+def apply_additive_bump(item: dict[str, Any], target: str) -> bool:
     """Append target to item["versions"] unless already listed.
 
     ver_id / wallet_conf / xbridge_conf are untouched: the existing conf
@@ -201,7 +203,7 @@ def apply_additive_bump(item: Dict[str, Any], target: str) -> bool:
     return True
 
 
-def should_skip_version_bump(rdata: Dict[str, Any]) -> bool:
+def should_skip_version_bump(rdata: dict[str, Any]) -> bool:
     """--update-versions must not auto-bump mandatory-hard-fork repos.
 
     The changelog path escalates those to REVIEW ("manual replacement

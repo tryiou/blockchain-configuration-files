@@ -24,6 +24,7 @@ agent-facing path stays standard-library-only.
 
 Run ``dashboard.py --help`` for the verb list.
 """
+
 import sys
 
 from dashboard.cli import main

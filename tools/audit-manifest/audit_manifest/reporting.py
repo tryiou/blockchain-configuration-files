@@ -1,10 +1,13 @@
 """All console output for the audit tool.
 
-Business logic never calls ``print`` directly — it calls :func:`report_line`,
-which writes the exact same bytes to stdout as the tool's historical
-``print(...)`` calls did. Keeping one seam here makes stdout a contract that
-can be captured and compared byte-for-byte, and keeps logging setup
-(:func:`configure_logging`) beside the output path it configures.
+Operator-facing console lines go through :func:`report_line` — business
+logic must not ``print`` them ad hoc, so stdout stays a contract that can
+be captured and compared byte-for-byte. Two seams are deliberately
+outside that rule and say so at their call sites: the structured
+``@@PROGRESS@@`` event channel (progress.py, machine-parsed by the
+dashboard) and the usage/help printer in ``dashboard/cli.py``. Keeping
+the output seam and logging setup (:func:`configure_logging`) together
+makes the single output path auditable.
 """
 
 from __future__ import annotations

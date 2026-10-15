@@ -13,6 +13,7 @@ upstream git tags exactly. The audit must therefore:
 * refuse the param-check with mode ``no-tag`` instead of falling back to
   the ``ver_id`` suffix.
 """
+
 from pathlib import Path
 from unittest import mock
 
@@ -61,7 +62,8 @@ def test_param_audit_without_declared_versions_is_no_tag():
     # If the ver_id suffix were consulted, the engine would try to audit
     # that phantom tag; the guard below turns that into a hard failure.
     with mock.patch.object(
-        eng, "audit_version",
+        eng,
+        "audit_version",
         side_effect=AssertionError("no declared versions → must not audit any tag"),
     ):
         res = eng.audit_coin_all_versions(coin, REPO_ROOT, timeout=10)
@@ -114,22 +116,22 @@ def test_repo_action_findings_carry_the_versions_block():
             "newer_alt": [],
             "remote_latest": "v2.0.0",
             "stale": False,
-            "entries": [{
-                "ticker": "XXX",
-                "ver_id": "xxx--v1.0.0",
-                "versions": ["v1.0.0"],
-                "expected_tags": ["v1.0.0"],
-                "found": ["v1.0.0"],
-                "missing": [],
-                "our_latest": "v1.0.0",
-                "remote_latest": "v2.0.0",
-                "action": ActionType.UPGRADE,
-            }],
+            "entries": [
+                {
+                    "ticker": "XXX",
+                    "ver_id": "xxx--v1.0.0",
+                    "versions": ["v1.0.0"],
+                    "expected_tags": ["v1.0.0"],
+                    "found": ["v1.0.0"],
+                    "missing": [],
+                    "our_latest": "v1.0.0",
+                    "remote_latest": "v2.0.0",
+                    "action": ActionType.UPGRADE,
+                }
+            ],
         },
     }
-    findings = build_findings(
-        [_xxx_coin()], report_repos, dict(_EMPTY_LOCAL), dict(_EMPTY_PORTS), None
-    )
+    findings = build_findings([_xxx_coin()], report_repos, dict(_EMPTY_LOCAL), dict(_EMPTY_PORTS), None)
     repo_findings = [f for f in findings if f["id"] == "REPO-ACTION"]
     assert len(repo_findings) == 1, [f["id"] for f in findings]
     assert repo_findings[0]["versions"] == {
@@ -158,16 +160,16 @@ def test_versions_block_defaults_sparse_entries_to_empty_lists():
             "newer_alt": None,
             "remote_latest": None,
             "stale": False,
-            "entries": [{
-                "ticker": "XXX",
-                "ver_id": "xxx--v1.0.0",
-                "action": ActionType.DEAD,
-            }],
+            "entries": [
+                {
+                    "ticker": "XXX",
+                    "ver_id": "xxx--v1.0.0",
+                    "action": ActionType.DEAD,
+                }
+            ],
         },
     }
-    findings = build_findings(
-        [_xxx_coin()], report_repos, dict(_EMPTY_LOCAL), dict(_EMPTY_PORTS), None
-    )
+    findings = build_findings([_xxx_coin()], report_repos, dict(_EMPTY_LOCAL), dict(_EMPTY_PORTS), None)
     block = next(f for f in findings if f["id"] == "REPO-ACTION")["versions"]
     for key in ("declared", "missing", "found", "newer_same", "newer_alt"):
         assert block[key] == [], key
@@ -180,9 +182,7 @@ def test_non_repo_findings_carry_the_versions_key_as_null():
 
     local = dict(_EMPTY_LOCAL)
     local["missing_wallet_conf"] = [("XXX", "xxx--v1.0.0", "xxx--v1.0.0.conf")]
-    findings = build_findings(
-        [_xxx_coin()], {}, local, dict(_EMPTY_PORTS), None
-    )
+    findings = build_findings([_xxx_coin()], {}, local, dict(_EMPTY_PORTS), None)
     assert findings, "the missing conf must produce a finding"
     for f in findings:
         assert "versions" in f, f["id"]
@@ -208,14 +208,45 @@ def test_fee_fixer_never_falls_back_to_ver_id_and_never_skips_silently(caplog):
     # Any fallback reintroduction must stay offline: resolve_source never
     # runs a real clone attempt (60 s timeout). The fallback itself is
     # detected through the missing "no declared versions" warning below —
-    # the AssertionError it raises here is swallowed by fix_fee_margin's
+    # the AssertionError it raises here is swallowed by plan_fee_margin's
     # broad except and only serves to prevent network I/O.
-    with mock.patch.object(
-        SourceCheckoutManager, "resolve_source",
-        side_effect=AssertionError("a fallback tag reached resolve_source"),
+    with (
+        mock.patch.object(
+            SourceCheckoutManager,
+            "resolve_source",
+            side_effect=AssertionError("a fallback tag reached resolve_source"),
+        ),
+        caplog.at_level(logging.WARNING),
     ):
-        with caplog.at_level(logging.WARNING):
-            assert ConfigAutoFixer.fix_fee_margin(REPO_ROOT, coin) == {}
+        assert ConfigAutoFixer.plan_fee_margin(REPO_ROOT, coin) == ([], None)
     assert any("no declared versions" in r.getMessage() for r in caplog.records), (
         "the skip must be logged like every sibling fixer warning"
     )
+
+
+def test_fee_plan_resolves_max_tag_not_first(tmp_path):
+    """Fee derivation targets the audit entry tag, not insertion order."""
+    from audit_manifest.fixes import ConfigAutoFixer
+    from audit_manifest.model import FeePolicy
+
+    coin = ManifestCoin(
+        ticker="AAA", ver_id="aaa--v1.0", versions=["v1.0.0", "v2.0.0"], wallet_conf="aaa.conf", xbridge_conf="aaa.conf"
+    )
+    (tmp_path / "xbridge-confs").mkdir()
+    (tmp_path / "xbridge-confs" / "aaa.conf").write_text("MinTxFee=0.1\nFeePerByte=1\n")
+    seen = {}
+
+    def _fake_resolve(self, c, tag, timeout=60):
+        seen["tag"] = tag
+        return tmp_path, "reused"
+
+    with (
+        mock.patch.object(SourceCheckoutManager, "resolve_source", _fake_resolve),
+        mock.patch("audit_manifest.fixes.fee_constants_for_coin", return_value=(100000, "ev", None, None)),
+        mock.patch(
+            "audit_manifest.fixes.fee_policy_for_coin", return_value=FeePolicy(rounding="floor", mempool="flat")
+        ),
+    ):
+        entries, _ = ConfigAutoFixer.plan_fee_margin(tmp_path, coin)
+    assert seen.get("tag") == "v2.0.0"
+    assert entries, "max-tag resolution must still plan fees"

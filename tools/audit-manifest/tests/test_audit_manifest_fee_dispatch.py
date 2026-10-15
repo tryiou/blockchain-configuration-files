@@ -25,7 +25,7 @@ def _make_go_tree(tmp_path, amount=1000):
 def test_fee_dispatch_uses_btcd_path_for_btcd_coin(tmp_path):
     src = _make_go_tree(tmp_path)
     btcd_coin = audit.ManifestCoin(ticker="LBC", ver_id="lbcd--v1", daemon_family="btcd")
-    rate, rate_ev, dust, dust_ev = audit.fee_constants_for_coin(btcd_coin, src)
+    rate, rate_ev, _dust, _dust_ev = audit.fee_constants_for_coin(btcd_coin, src)
     assert rate == 1000, f"btcd path must resolve relay from mempool/policy.go, got {rate!r}"
     assert rate_ev.startswith("mempool/policy.go:"), f"citation file wrong: {rate_ev!r}"
 

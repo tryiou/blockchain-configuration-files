@@ -24,8 +24,9 @@ limits**.
 
 | Path | Role |
 |---|---|
-| `tools/audit-manifest/audit-manifest.py` | The tool (single file) |
-| `tools/audit-manifest/dashboard.py` | Textual TUI + one-JSON-object-per-task interface over the tool |
+| `tools/audit-manifest/audit-manifest.py` | Shim (59 lines) into `audit_manifest/` |
+| `tools/audit-manifest/audit_manifest/` | Engine: probe, param-check, fixers, applier (`apply_plan.py`), scaffold, versions |
+| `tools/audit-manifest/dashboard/` | Textual TUI: verbs, runner, screens, widgets, state, paths (`model.py` holds pure fleet math) |
 | `tools/audit-manifest/requirements.txt` | Optional: Textual, needed only by the dashboard's TUI |
 | `tools/audit-manifest/tests/` | Its tests: `test_audit_manifest_*` cover the tool, `test_dashboard_*` the dashboard |
 | `tools/audit-manifest/README.md` | This file |
@@ -58,7 +59,11 @@ python3 tools/audit-manifest/audit-manifest.py --report /tmp/audit.json
 ```
 
 `--manifest <path>` overrides the manifest location; by default it is
-resolved to `manifest-latest.json` at the root of this repository.
+resolved to `manifest-latest.json` at the root of this repository. The
+manifest's directory must be the repo root: the data verbs (probe,
+param-check, write flags, report) refuse with exit 2 when `wallet-confs/`
+or `xbridge-confs/` is missing next to the manifest, since every fact
+they report or write is anchored there.
 
 ### Modes
 
@@ -72,6 +77,9 @@ resolved to `manifest-latest.json` at the root of this repository.
 | Rewrite `MinTxFee` / `FeePerByte` to the strict chain gates | `--fee-write` | **Yes** |
 | Reassign colliding P2P/RPC ports (earliest lineage wins) | `--fix-ports` | **Yes** |
 | Append the latest upstream tag to `manifest-latest.json` + regen `base.j2` | `--update-versions` (`--replace-versions`) | **Yes** |
+| Read version data from a probe report instead of probing (offline) | `--versions-from <report>` (with `--update-versions`) | No |
+| Apply a reviewed plan file with per-entry old verification | `--apply-plan <plan>` | **Yes** |
+| Remove coins from the manifest plus every coin file | `--delist --ticker X` (`--dry-run` to preview) | **Yes** |
 | Onboard a new coin from a GitHub core-wallet repo | `--scaffold --repo-url <url>` | Only with `--apply` |
 | JSON report | `--report <path>` | Report file only |
 
@@ -88,6 +96,13 @@ tree is untouched.
 opt-in — nothing is written unless you pass the flag. Review the diff
 (`git diff`) before committing; rendered `.conf` files are regenerated from
 `manifest-latest.json` + `autobuild/configs/*.base.j2`, never hand-edited.
+
+**Port checks ride along with the conf write flows.** `--write-config` and
+`--fee-write` imply `--fix-ports`, so a write without it still plans the
+collision moves; a bare `--dry-run` implies nothing — with nothing else to
+plan, collisions stay reported as findings instead of moves. Every port
+write re-verifies fleet freedom at apply time, refusing instead of
+introducing a collision the plan predates.
 
 **The three conf/port write flags imply `--param-check`.** `--write-config`,
 `--fee-write` and `--fix-ports` derive their work from the parameter
@@ -108,7 +123,8 @@ python3 tools/audit-manifest/audit-manifest.py \
 This shallow-clones the repo at its newest stable tag and extracts ports,
 address/secret prefixes, `COIN` decimals, block time, `TxVersion`, relay fee
 constants and daemon/datadir names straight from source, proposing free ports
-against the current fleet. Output lands in `/tmp/newcoin_<ticker>/` (override
+against the current fleet (a crowded-out fleet refuses instead of staging a
+collision). Output lands in `/tmp/newcoin_<ticker>/` (override
 with `--scaffold-out-dir`); add `--apply` to write the conf pair and manifest
 entry into this repo. If the fee constants cannot be resolved from source it
 **refuses to emit defaults** rather than guessing.
@@ -123,8 +139,9 @@ per-verb log, and hands back a single JSON envelope. It adds no auditing of
 its own — every verdict still comes from the tool.
 
 ```bash
-# Interactive. Four tabs (Overview / Findings / Run / Write) plus a detail
-# pane, Ctrl+P to pick a task, Ctrl+R to refresh. Needs a TTY and Textual.
+# Interactive. Two screens — pick the coin scope, then work in the
+# workspace (task groups, Findings/Plan/Log, detail pane). Ctrl+P picks a
+# task, Ctrl+R refreshes. Needs a TTY and Textual.
 python3 tools/audit-manifest/dashboard.py
 
 # One task, one JSON object on stdout:
@@ -140,32 +157,104 @@ waiting for a terminal that is not there.
 
 ### Verbs
 
-| Verb | What it runs | Default mode |
-|---|---|---|
-| `list` | manifest entries, no probe | offline |
-| `audit` | the full fleet audit | probe + changelog |
-| `findings` | aggregated findings, worst-first | probe, `--no-changelog` |
-| `param-check` | conf fact-check against coin source | `--local-only` |
-| `ports` | fleet port-collision matrix | `--local-only` |
-| `cross-check` | missing and orphaned conf files | `--local-only` |
-| `plan-fix` | preview every write, apply none | `--local-only --param-check --dry-run` |
-| `apply-fix` | apply the conf and port fixes | `--local-only --param-check` (**writes**) |
-| `update-versions` | bump manifest versions to the latest tag | `--no-changelog` (**writes**) |
-| `scaffold` | extract a new coin entry from a repo URL | preview; `--apply` to write |
-| `report` | metadata, summary and counts of the last run | offline |
+| Verb | What it runs | Default mode | Cost | TUI answers in |
+|---|---|---|---|---|
+| `list` | manifest entries, no probe | offline | local | Log |
+| `audit` | the full fleet audit | probe + changelog | network | Findings |
+| `findings` | aggregated findings, worst-first | probe, `--no-changelog` | network | Findings |
+| `param-check` | conf fact-check against coin source | `--local-only` | heavy | Findings |
+| `ports` | fleet port-collision matrix | `--local-only` | local | overview |
+| `cross-check` | missing and orphaned conf files | `--local-only` | local | overview |
+| `plan-fix` | preview every write, apply none | `--local-only --param-check --dry-run` | heavy | Plan |
+| `apply-fix` | apply the conf and port fixes | `--local-only --param-check` (**writes**) | heavy | Plan |
+| `apply-plan` | apply a reviewed plan file | `--apply-plan <file>` (**writes**) | local | Plan |
+| `update-versions` | bump manifest versions to the latest tag | changelog probe (**writes**, gate live) | network | Plan |
+| `scaffold` | extract a new coin entry from a repo URL | preview; `--apply` to write | network | Plan |
+| `delist` | preview removal of ticked coins | `--delist --dry-run` | local | Plan |
+| `analyze` | probe the fleet (TUI depth toggles available) | probe, `--no-changelog` | network | Findings |
+| `report` | metadata, summary and counts of the last run | offline | local | Log |
+
+The Findings tab merges every fleet finding-slot (`findings.json`,
+`audit.json`, `param-check.json`, `analyze.json`) into one row per coin — newest row
+wins per coin+check, scoped runs never leak in. The overview's
+Sources ledger names each slot's row count and age, plus the ports
+collision map and the cross-check missing/orphan lists. The ledger
+also falls back to a fresh probe report's embedded sections when no
+dedicated ports/cross-check run exists yet.
+
+Cost: `local` reads this checkout only, `network` talks to upstream,
+and `heavy` is network plus minutes (see `plan-fix` below). The TUI
+shows the same classes as `[local]`, `[network]` and `[network (slow)]`
+on each task row.
 
 Each verb has exactly one documented default mode. `--with-probe` widens a
 local-only verb, `--with-changelog` widens a `--no-changelog` verb,
 `--local-only` narrows anything. Nothing is ever narrowed silently.
 
 **`plan-fix` is expensive on purpose.** It runs the full `--param-check`, so
-it touches every coin's source: measured **11 min on a cold cache**. A warm
+it touches every coin's source: expect minutes, scaling with fleet size
+and connection. A warm
 cache skips the clone — it stays offline only for a tag already checked
 out from the same URL with a clean tree; a multi-version run switches
 HEAD per version, and every switch past the tag the cache already sits
-at costs one refetch. `apply-fix` repeats that work, so run `plan-fix` first,
+at costs one refetch. Applying never re-derives: `apply-fix` and
+`--apply-plan` execute the reviewed entries with per-entry
+old-verification, so run Plan first,
 read it, and only then apply. If all you want is the diff, `--dry-run` is
 available on any write verb.
+
+### The TUI
+
+The TUI opens on the **coin scope picker**: tick what the next task may
+touch, then Continue. All / None / Invert act on the whole fleet — the
+filter only hides rows. Every coin ticked (the fresh state) is the full
+fleet: no `--ticker` flag is emitted. Continue is disabled at zero, so
+an empty scope can never be confirmed that way — a scope arriving empty
+another way is refused at run time — and `Ctrl+O` reopens the picker
+at any time.
+
+The **workspace** underneath runs four actions — press a button,
+or `Ctrl+P` for the palette (which also offers Analyze depths):
+
+| Action | Does |
+|---|---|
+| Analyze | Probe the fleet → Findings (depths: quick local-only, standard, full +changelog, deep +source) |
+| Plan | Preview every write — conf/port fixes plus version bumps — touches nothing → Plan |
+| Apply | Confirm the reviewed plan, then apply exactly those entries → Plan |
+| Add coin | Preview a new coin from a GitHub URL, review it in Plan, apply it |
+
+On short terminals the ledger compacts so the results tabs keep
+their rows; the four rows always fit.
+
+Each action row leads with its cost class (table above), so truncation
+eats the summary, never the safety tag. A read-only action on a
+narrowed scope confirms its exact size
+first — and states what the scope does *not* narrow: probes and
+param-check follow the ticked coins, while the cross-check and the
+port matrix always survey the whole fleet; a full-fleet run starts
+immediately. Apply confirms before it runs, through the Apply dialog —
+always carrying
+its scope line, full fleet included — and listing the files it will
+touch; confirming writes the confirmed set to `plan-fix.apply.json`
+and applies exactly that file, so the preview and the apply cannot
+disagree. Add coin asks for the coin's GitHub URL in a dialog
+(`https://github.com/<org>/<repo>`, refused with a hint otherwise),
+stages the extracted files for review in the Plan tab, and never
+inherits the coin scope. Removing a coin works the same way in
+reverse: tick it, run delist from the palette, review, apply.
+
+While a task runs, the strip above the tabs shows the current phase,
+the elapsed time, and **Stop** — visible from Findings, Plan and Log
+alike. Stop terminates the child process; its
+output up to that point is kept in the verb's log file, and progress
+lines stay on the strip so the panes remain readable output. The log
+file keeps human lines only — machine progress events never land in
+it. `Ctrl+D`
+toggles the detail pane (hidden by default on narrow terminals).
+
+Your scope, filter and open tab are saved to
+`.cache/audit-manifest/dashboard.json` when you quit (`Ctrl+Q`) and
+restored on the next start.
 
 ### The JSON envelope
 
@@ -187,10 +276,18 @@ Verb extras: `cross-check` and `ports` add `local` and `port_collisions`,
 `scaffold` payload, `report` adds `last_run`, `report_path` and `log_path`.
 
 Reports land in `.cache/audit-manifest/<verb>.json`, next to `<verb>.log`
-(the tool's full console output) and `<verb>.meta.json` (what produced it);
+(the tool's human console output) and `<verb>.meta.json` (what produced it);
 `last-run.json` and `last-run.meta.json` mirror whichever verb ran last.
 Keeping one file per verb is what stops a cheap `ports` run from overwriting
 a richer `findings` report.
+
+A narrowed (`--ticker`) run writes the parallel `<verb>.scoped.json`
+slot instead and never touches the fleet slot: fleet views (the TUI
+overview, the findings table, the fleet-report pick) only ever read
+fleet-slot files, while `last-run.json` still mirrors whatever ran last
+— check its `tickers`/`argv` before quoting it as the fleet. The Plan
+tab and the Apply dialog likewise resolve the plan by current scope
+(`plan-fix.scoped.json` when narrowed).
 
 ### Textual
 
@@ -267,6 +364,10 @@ From the root of this repository:
 python3 -m pytest tools/audit-manifest/ -q
 ```
 
+With `pytest-xdist` installed the same suite runs in ~24s on a
+multicore box (`-n 8`); without it, ~170s — the cost is ~100 Textual
+pilot startups plus a few real subprocess spawns, not the assertions.
+
 The suite covers the version engine, fee policy/floor model, block-time
 and tx-time extraction, prefix scoping, scaffold extraction, shared-conf
 and per-version audit behaviour; `dashboard.py`'s contract (verbs, flag
@@ -277,7 +378,10 @@ their own and the suite needs nothing beyond `pytest`.
 
 The suite is hermetic: probes are stubbed, `--local-only` is used where a
 real invocation is needed, and no test contacts the network or modifies the
-working tree — about two seconds without the TUI tests, ten with them.
+working tree — about nine seconds without the three pilot-driven dashboard
+files (`test_dashboard_tui.py`, `test_dashboard_scoped_cache.py`,
+`test_dashboard_corruption_matrix.py`), ~170s with them (serial; `-n 8`
+cuts the full run to ~24s).
 
 Most tests build their own fixtures under pytest's tmp dir. Nothing
 skips on a fresh clone and no test needs a warm `.cache/audit-manifest/`.

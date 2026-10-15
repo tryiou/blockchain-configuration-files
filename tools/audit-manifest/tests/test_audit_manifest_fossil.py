@@ -7,6 +7,7 @@ Covers mandatory creatordate fetch and fossil filtering:
   TRC v0.12.2.5 (2020-03-05) vs v0.13.0.0 (2016-01-09) -> fossil
 Ensures single probe_tag_dates call per repo and DRY helper.
 """
+
 import json
 import tempfile
 from pathlib import Path
@@ -32,7 +33,7 @@ def test_newest_and_stale_helper():
 
     # stale case: newest is old
     old = {"v0.10.0": "2018-01-01 00:00:00 +0000"}
-    nt, nd, st = _newest_and_stale(old, stale_years=3.0)
+    _nt, _nd, st = _newest_and_stale(old, stale_years=3.0)
     assert st is True
 
     # empty
@@ -132,20 +133,34 @@ def test_single_probe_call_mock():
             "v1.2.6": "2025-01-01 00:00:00 +0000",
         }
 
-        with mock.patch.object(audit.RemoteProbeService, "probe_redirect", return_value=None) as _mr, \
-             mock.patch.object(audit.RemoteProbeService, "probe_tags", return_value=(audit.RepoStatus.ALIVE, remote_tags)) as _mt, \
-             mock.patch.object(audit.RemoteProbeService, "probe_tag_dates", return_value=tag_dates_return) as mock_dates, \
-             mock.patch("time.sleep", return_value=None):
-            rc = audit.main([
-                "--manifest", str(manifest_file),
-                "--ticker", "COLX",
-                "--timeout", "5",
-                "--report", str(report_file),
-            ])
+        with (
+            mock.patch.object(audit.RemoteProbeService, "probe_redirect", return_value=None) as _mr,
+            mock.patch.object(
+                audit.RemoteProbeService,
+                "probe_tags",
+                return_value=(audit.RepoStatus.ALIVE, remote_tags),
+            ) as _mt,
+            mock.patch.object(audit.RemoteProbeService, "probe_tag_dates", return_value=tag_dates_return) as mock_dates,
+            mock.patch("time.sleep", return_value=None),
+        ):
+            rc = audit.main(
+                [
+                    "--manifest",
+                    str(manifest_file),
+                    "--ticker",
+                    "COLX",
+                    "--timeout",
+                    "5",
+                    "--report",
+                    str(report_file),
+                ]
+            )
             # main should succeed (0) even with minimal manifest
             assert rc == 0, f"audit.main returned {rc}"
             # Must have called probe_tag_dates exactly once per repo (one repo in manifest)
-            assert mock_dates.call_count == 1, f"expected single probe_tag_dates call per repo, got {mock_dates.call_count}"
+            assert mock_dates.call_count == 1, (
+                f"expected single probe_tag_dates call per repo, got {mock_dates.call_count}"
+            )
             # Verify selected set included held_max and newer candidates (union)
             called_args, _ = mock_dates.call_args
             selected_set = called_args[1] if len(called_args) > 1 else set()
@@ -188,3 +203,60 @@ def test_integration_colx_fossil_via_detect_newer_and_dates():
     ns_filtered = [t for t in newer_same if t not in fset]
     na_filtered = [t for t in newer_alt if t not in fset]
     assert "v2.3.0" not in ns_filtered + na_filtered
+
+
+def test_console_line_leads_with_verdict_and_caps_tag_lists(capsys):
+    """F5a: per-coin line scans — action= first, padded ticker, capped lists."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        manifest = [
+            {
+                "ticker": "AAA",
+                "ver_id": "aaa--v1.0.0",
+                "versions": ["v1.0.0"],
+                "repo_url": "https://github.com/example/aaa",
+                "wallet_conf": "aaa.conf",
+                "xbridge_conf": "aaa.conf",
+            }
+        ]
+        manifest_file = tmp_path / "manifest.json"
+        manifest_file.write_text(json.dumps(manifest))
+        report_file = tmp_path / "report.json"
+        (tmp_path / "wallet-confs").mkdir(exist_ok=True)
+        (tmp_path / "xbridge-confs").mkdir(exist_ok=True)
+        (tmp_path / "autobuild" / "configs").mkdir(parents=True, exist_ok=True)
+        remote_tags = {"v1.0.0", "v1.1.0", "v1.2.0", "v1.3.0", "v1.4.0", "v1.5.0", "v1.6.0"}
+        with (
+            mock.patch.object(audit.RemoteProbeService, "probe_redirect", return_value=None),
+            mock.patch.object(
+                audit.RemoteProbeService,
+                "probe_tags",
+                return_value=(audit.RepoStatus.ALIVE, remote_tags),
+            ),
+            mock.patch.object(audit.RemoteProbeService, "probe_tag_dates", return_value={}),
+            mock.patch("time.sleep", return_value=None),
+        ):
+            rc = audit.main(
+                [
+                    "--manifest",
+                    str(manifest_file),
+                    "--ticker",
+                    "AAA",
+                    "--timeout",
+                    "5",
+                    "--report",
+                    str(report_file),
+                ]
+            )
+            assert rc in (0, 1)
+            out = capsys.readouterr().out
+            coin_lines = [ln for ln in out.splitlines() if ln.startswith("[1/1]")]
+            assert len(coin_lines) == 1, f"one per-coin line, got {coin_lines!r}"
+            line = coin_lines[0]
+            assert line.index("action=") < line.index("ALIVE"), f"verdict first, got {line[:80]!r}"
+            assert "AAA         " in line, f"ticker padded to 12, got {line[:80]!r}"
+            import re
+
+            assert re.search(r"NEWER_same=\[[^\]]*\+\d+ more\]", line), f"tag list capped with +N, got {line!r}"

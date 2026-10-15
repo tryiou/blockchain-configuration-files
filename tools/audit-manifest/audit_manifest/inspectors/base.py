@@ -4,26 +4,35 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional, Tuple
 
 from ..checkout import SourceReader
 from ..util import eval_cnum
+
+# One nTime-serialization detector, shared by the engine checkers and the
+# scaffolder (F6: this pattern previously lived in five copies, one of which
+# had drifted to a non-matching form).
+NTIME_SERIALIZED_RE = re.compile(r">>\s*(?:tx\.)?nTime\b")
+NTIME_SERIALIZED_OR_RW_RE = re.compile(r">>\s*(?:tx\.)?nTime\b|READWRITE\([^)]*\bnTime\b")
+
+
+# Recursion ceiling for the C++ expression evaluator.
+_MAX_CEXPR_DEPTH = 5
 
 
 class CppExpressionEvaluator:
     """Resolves C++ constants and macro expressions across header dependencies."""
 
     @classmethod
-    def resolve_cexpr(
+    def resolve_cexpr(  # noqa: C901, PLR0912  # marker cascade: one branch per known source form
         cls,
         rhs: str,
         header_text: str,
         header_name: str,
         src_root: Path,
         depth: int = 0,
-    ) -> Tuple[Optional[int], Optional[str]]:
+    ) -> tuple[int | None, str | None]:
         rhs = rhs.strip().rstrip(";").strip()
-        if depth > 5:
+        if depth > _MAX_CEXPR_DEPTH:
             return None, None
         # Constant resolution must ignore commented-out definitions: a stale
         # `// ... CENT = 1000000;` above the active `CENT = 10000;` (Verge
@@ -61,7 +70,13 @@ class CppExpressionEvaluator:
                 base, _ = cls.resolve_cexpr(dm.group(1), header_text, header_name, src_root, depth + 1)
 
         if base is None:
-            for cand_path in ("src/consensus/amount.h", "src/amount.h", "src/policy/policy.h", "src/validation.h", "src/main.h"):
+            for cand_path in (
+                "src/consensus/amount.h",
+                "src/amount.h",
+                "src/policy/policy.h",
+                "src/validation.h",
+                "src/main.h",
+            ):
                 atxt = SourceReader.slurp(src_root / cand_path)
                 if atxt is None or atxt == header_text:
                     continue

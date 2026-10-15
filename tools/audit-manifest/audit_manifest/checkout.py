@@ -12,15 +12,19 @@ import os
 import re
 import shutil
 import subprocess
+from collections import deque
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple, Union
+from typing import ClassVar
 
 from .constants import CACHE_ROOT, logger
 from .model import ManifestCoin
 from .probe import SystemCommandRunner
 
+# Longest git output previewed in a diagnostic line.
+_MAX_PREVIEW_CHARS = 200
 
-def repo_checkout_dir(ticker: str, cache_root: Optional[Path] = None) -> Path:
+
+def repo_checkout_dir(ticker: str, cache_root: Path | None = None) -> Path:
     """``<cache>/repos/<ticker>`` — the one checkout folder for a coin.
 
     Single source of truth used by the manager, the scaffold, and the
@@ -52,7 +56,7 @@ def canonical_repo_url(url: str) -> str:
     return url.strip().rstrip("/").removesuffix(".git")
 
 
-def _stderr_note(proc: Optional[subprocess.CompletedProcess]) -> str:
+def _stderr_note(proc: subprocess.CompletedProcess | None) -> str:
     """Single-line, truncated git stderr for an ERROR line.
 
     Failures must be loud about the cause, not only the stage: git's own
@@ -62,8 +66,8 @@ def _stderr_note(proc: Optional[subprocess.CompletedProcess]) -> str:
     if proc is None or not proc.stderr or not proc.stderr.strip():
         return ""
     text = " ".join(proc.stderr.split())
-    if len(text) > 200:
-        text = text[:197] + "..."
+    if len(text) > _MAX_PREVIEW_CHARS:
+        text = text[: _MAX_PREVIEW_CHARS - len("...")] + "..."
     return f"; {text}"
 
 
@@ -73,15 +77,21 @@ class SourceCheckoutManager:
     One checkout lives under ``<cache>/repos/<ticker>`` per coin (gitignored).
     """
 
-    def __init__(self, cache_root: Optional[Path] = None, runner: SystemCommandRunner = SystemCommandRunner()):
+    def __init__(self, cache_root: Path | None = None, runner: SystemCommandRunner | None = None):
         self.cache_root = cache_root
-        self.runner = runner
+        self.runner = runner or SystemCommandRunner()
 
-    def resolve_source(self, coin: ManifestCoin, tag: str, timeout: int) -> Tuple[Optional[Path], str]:
+    def resolve_source(self, coin: ManifestCoin, tag: str, timeout: int) -> tuple[Path | None, str]:
         """Resolve local source for the exact tag string only (see resolve_for)."""
         return self.resolve_for(coin.ticker, coin.repo_url, tag, timeout)
 
-    def resolve_for(self, ticker: str, repo_url: Optional[str], tag: str, timeout: int) -> Tuple[Optional[Path], str]:
+    def resolve_for(  # noqa: C901, PLR0911, PLR0912  # checkout state machine: one return per resolution outcome
+        self,
+        ticker: str,
+        repo_url: str | None,
+        tag: str,
+        timeout: int,
+    ) -> tuple[Path | None, str]:
         """Fetch ``tag`` for ``ticker`` into the coin's single checkout folder.
 
         Exact string semantics: only the byte-equal tag counts — "v4.2.0.1"
@@ -101,6 +111,10 @@ class SourceCheckoutManager:
         degrades to a silent reuse, and the next pass repairs whatever
         stage the switch died at.
         """
+        # This method owns every checkout-tree mutation (clone, staging
+        # rename, force-fetch, tag switch). Invalidate memoized source reads
+        # first: cached content must never outlive the tree it came from.
+        SourceReader.invalidate()
         if not repo_url:
             return None, "no-repo-url"
         target = repo_checkout_dir(ticker, cache_root=self.cache_root)
@@ -109,7 +123,10 @@ class SourceCheckoutManager:
         except OSError as exc:
             logger.error(
                 "CLONE-FAILED %s @ %s: cannot prepare %s (%s)",
-                ticker, tag, target.parent, exc.__class__.__name__,
+                ticker,
+                tag,
+                target.parent,
+                exc.__class__.__name__,
             )
             return None, "clone-failed"
         op_timeout = max(timeout, 60)
@@ -122,7 +139,9 @@ class SourceCheckoutManager:
             # fetch-failed and a remove-it hint.
             logger.error(
                 "FETCH-FAILED %s @ %s: %s is a symlink — remove it to let the tool recreate it",
-                ticker, tag, target,
+                ticker,
+                tag,
+                target,
             )
             return None, "fetch-failed"
 
@@ -130,7 +149,9 @@ class SourceCheckoutManager:
             if target.exists():
                 logger.error(
                     "CLONE-FAILED %s @ %s: %s exists but is not a directory — remove it",
-                    ticker, tag, target,
+                    ticker,
+                    tag,
+                    target,
                 )
                 return None, "clone-failed"
             # Clone into a process-private staging folder, then rename into
@@ -161,18 +182,25 @@ class SourceCheckoutManager:
                         shutil.rmtree(staging, ignore_errors=True)
                         logger.error(
                             "CLONE-FAILED %s @ %s: another run created %s first, this clone was dropped",
-                            ticker, tag, target,
+                            ticker,
+                            tag,
+                            target,
                         )
                         return None, "clone-failed"
                     return target, "cloned"
                 logger.error(
                     "CLONE-FAILED %s @ %s: %s (refs/tags/%s may be shadowed by a branch or absent upstream)",
-                    ticker, tag, stage, tag,
+                    ticker,
+                    tag,
+                    stage,
+                    tag,
                 )
             else:
                 logger.error(
                     "CLONE-FAILED %s @ %s: git clone failed (rc=%s)%s",
-                    ticker, tag, (proc.returncode if proc else "no-output"),
+                    ticker,
+                    tag,
+                    (proc.returncode if proc else "no-output"),
                     _stderr_note(proc),
                 )
             # Whatever remains here is staging this call created (pid-private).
@@ -182,7 +210,9 @@ class SourceCheckoutManager:
         if not self._is_own_worktree(target, timeout):
             logger.error(
                 "FETCH-FAILED %s @ %s: %s is not its own git checkout — remove it to let the tool recreate it",
-                ticker, tag, target,
+                ticker,
+                tag,
+                target,
             )
             return None, "fetch-failed"
 
@@ -197,14 +227,15 @@ class SourceCheckoutManager:
         if stage is not None:
             logger.error(
                 "FETCH-FAILED %s @ %s: %s — repo at %s",
-                ticker, tag, stage, target,
+                ticker,
+                tag,
+                stage,
+                target,
             )
             return None, "fetch-failed"
         return target, "fetched"
 
-    def _switch_to_tag(
-        self, target: Path, repo_url: str, tag: str, timeout: int, op_timeout: int
-    ) -> Optional[str]:
+    def _switch_to_tag(self, target: Path, repo_url: str, tag: str, timeout: int, op_timeout: int) -> str | None:
         """Fetch the exact tag into ``target`` and switch to it.
 
         Shared by the fresh-clone recovery and the update path, so both
@@ -214,8 +245,7 @@ class SourceCheckoutManager:
         ERROR line.
         """
         proc_fetch = self.runner.run(
-            ["git", "-C", str(target), "fetch", "-q", "--depth", "1", repo_url,
-             f"+refs/tags/{tag}:refs/tags/{tag}"],
+            ["git", "-C", str(target), "fetch", "-q", "--depth", "1", repo_url, f"+refs/tags/{tag}:refs/tags/{tag}"],
             op_timeout,
             env_extra={"GIT_TERMINAL_PROMPT": "0"},
         )
@@ -281,9 +311,7 @@ class SourceCheckoutManager:
         manifest repo_url correction to a DIFFERENT repo still fails here
         — colliding tag names across repos are the norm.
         """
-        proc = self.runner.run(
-            ["git", "-C", str(target), "config", "--get", "remote.origin.url"], timeout
-        )
+        proc = self.runner.run(["git", "-C", str(target), "config", "--get", "remote.origin.url"], timeout)
         if proc is None or proc.returncode != 0 or not proc.stdout.strip():
             return False
         return canonical_repo_url(proc.stdout.strip()) == canonical_repo_url(repo_url)
@@ -326,70 +354,113 @@ class SourceCheckoutManager:
 
 
 class SourceReader:
-    """Wrapper-aware source code file reader with multi-level directory discovery."""
+    """Wrapper-aware source code file reader with multi-level directory discovery.
+
+    Only path resolution is memoized, and only for the lifetime of one
+    stable checkout state: the wrapper-directory walk is the expensive part
+    of a lookup, and a probe for a file a coin does not have re-walks the
+    whole tree every time. The checkout manager owns every tree mutation
+    (clone, staging rename, force-fetch, tag switch) and invalidates the
+    cache at the start of ``resolve_for``, so a cached resolution can never
+    outlive the tree it was resolved in. File content is always read fresh —
+    this cache never decides what a reader sees.
+    """
+
+    _RESOLVED: ClassVar[dict[str, Path | None]] = {}
+    _WRAPPERS: ClassVar[dict[str, list[Path]]] = {}
+
+    @classmethod
+    def invalidate(cls) -> None:
+        """Drop every cached resolution; call before mutating a checkout tree."""
+        cls._RESOLVED.clear()
+        cls._WRAPPERS.clear()
 
     @staticmethod
-    def slurp(path: Union[str, Path]) -> Optional[str]:
+    def slurp(path: str | Path) -> str | None:
         try:
-            with open(path, encoding="utf-8", errors="replace") as fh:
+            with Path(path).open(encoding="utf-8", errors="replace") as fh:
                 return fh.read()
         except OSError:
             return None
 
     @classmethod
-    def slurp_src(cls, src_dir: Path, rel_path: str) -> Optional[str]:
+    def slurp_src(cls, src_dir: Path, rel_path: str) -> str | None:
         """Slurp src/rel_path scanning top-level and nested wrapper directories.
 
-        Generic BFS depth≤3 capped, exclude .git and symlinks, not hardcoded.
+        Generic BFS depth<=3 capped, exclude .git and symlinks, not hardcoded.
+        The wrapper walk is memoized per stable checkout state, so a probe
+        for a file the coin does not have costs one walk per tag, not one
+        per conf value. Content is read fresh on every call.
         """
+        path = cls._resolve_src(src_dir, rel_path)
+        return cls.slurp(path) if path is not None else None
+
+    @classmethod
+    def _resolve_src(cls, src_dir: Path, rel_path: str) -> Path | None:
+        """Locate src/rel_path at top level or inside wrapper directories."""
+        key = f"{src_dir}|{rel_path}"
+        if key not in cls._RESOLVED:
+            cls._RESOLVED[key] = cls._find_src(src_dir, rel_path)
+        return cls._RESOLVED[key]
+
+    @classmethod
+    def _find_src(cls, src_dir: Path, rel_path: str) -> Path | None:
+        """Direct path first, then the wrapper cascade in discovery order."""
         direct = src_dir / rel_path
-        txt = cls.slurp(direct)
-        if txt is not None:
-            return txt
+        if cls.slurp(direct) is not None:
+            return direct
         if not rel_path.startswith("src/"):
             return None
+        for wrapper in cls._wrapper_dirs(src_dir):
+            cand = wrapper / rel_path
+            if cls.slurp(cand) is not None:
+                return cand
+        return None
 
-        from collections import deque
+    @staticmethod
+    def _usable_dir(entry: Path) -> bool:
+        """A directory the walk may enter: real, readable, not the repo dir."""
+        return entry.is_dir() and not entry.is_symlink() and entry.name != ".git"
 
-        seen: Set[Path] = set()
-        queue: deque[Tuple[Path, int]] = deque()
-        try:
-            for entry in src_dir.iterdir():
-                if entry.is_symlink():
-                    continue
-                if not entry.is_dir():
-                    continue
-                if entry.name == ".git":
-                    continue
-                if entry in seen:
+    @classmethod
+    def _wrapper_dirs(cls, src_dir: Path) -> list[Path]:
+        """Wrapper-directory snapshot in BFS discovery order, depth<=3.
+
+        Every lookup in one checkout state walks the same tree, so the walk
+        itself is memoized per src_dir: the snapshot preserves the exact
+        order a per-lookup BFS would have probed, so the resolved file is
+        the same file — the only change is that the tree is read once.
+        """
+        key = f"wrappers:{src_dir}"
+        if key in cls._WRAPPERS:
+            return cls._WRAPPERS[key]
+        seen: set[Path] = set()
+        queue: deque[tuple[Path, int]] = deque()
+        out: list[Path] = []
+
+        def enqueue(entries, depth: int) -> None:
+            for entry in entries:
+                if entry in seen or not cls._usable_dir(entry):
                     continue
                 seen.add(entry)
-                queue.append((entry, 1))
+                queue.append((entry, depth))
+
+        try:
+            enqueue(src_dir.iterdir(), 1)
         except OSError:
-            return None
+            cls._WRAPPERS[key] = out
+            return out
 
         while queue:
             cur, depth = queue.popleft()
-            cand = cur / rel_path
-            txt2 = cls.slurp(cand)
-            if txt2 is not None:
-                return txt2
-            if depth < 3:
+            out.append(cur)
+            if depth < 3:  # noqa: PLR2004  # source-tree walk depth guard
                 try:
-                    for sub in cur.iterdir():
-                        if sub.is_symlink():
-                            continue
-                        if not sub.is_dir():
-                            continue
-                        if sub.name == ".git":
-                            continue
-                        if sub in seen:
-                            continue
-                        seen.add(sub)
-                        queue.append((sub, depth + 1))
+                    enqueue(cur.iterdir(), depth + 1)
                 except OSError:
                     continue
-        return None
+        cls._WRAPPERS[key] = out
+        return out
 
     @staticmethod
     def strip_comments(text: str) -> str:
@@ -401,15 +472,15 @@ class SourceReader:
         return re.sub(r"^[ \t]*//.*$", "", text, flags=re.M)
 
     @classmethod
-    def parse_conf_sections(cls, path: Union[str, Path]) -> Dict[str, Dict[str, str]]:
+    def parse_conf_sections(cls, path: str | Path) -> dict[str, dict[str, str]]:
         """Parse ini-style conf into {section: {key: value}}."""
-        out: Dict[str, Dict[str, str]] = {"": {}}
+        out: dict[str, dict[str, str]] = {"": {}}
         cur = ""
         txt = cls.slurp(path)
         if txt is None:
             return out
-        for line in txt.splitlines():
-            line = line.strip()
+        for raw_line in txt.splitlines():
+            line = raw_line.strip()
             if not line or line.startswith("#"):
                 continue
             if line.startswith("[") and line.endswith("]"):
@@ -423,14 +494,14 @@ class SourceReader:
         return out
 
     @classmethod
-    def parse_conf(cls, path: Union[str, Path]) -> Dict[str, str]:
+    def parse_conf(cls, path: str | Path) -> dict[str, str]:
         """Parse key=value pairs dropping comments and section headers."""
-        conf: Dict[str, str] = {}
+        conf: dict[str, str] = {}
         txt = cls.slurp(path)
         if txt is None:
             return conf
-        for line in txt.splitlines():
-            line = line.strip()
+        for raw_line in txt.splitlines():
+            line = raw_line.strip()
             if not line or line.startswith("#") or line.startswith("["):
                 continue
             if "=" not in line:
@@ -440,14 +511,15 @@ class SourceReader:
         return conf
 
     @staticmethod
-    def lineage_date(repo_root: Path, rel_path: str, key: str, runner: SystemCommandRunner = SystemCommandRunner()) -> Optional[str]:
+    def lineage_date(repo_root: Path, rel_path: str, key: str, runner: SystemCommandRunner | None = None) -> str | None:
         """Determine git birth-date (YYYY-MM-DD) of a key= line via git blame."""
+        runner = runner or SystemCommandRunner()
         path = repo_root / rel_path
         if not path.is_file():
             return None
-        n: Optional[int] = None
+        n: int | None = None
         try:
-            with open(path, encoding="utf-8", errors="replace") as fh:
+            with path.open(encoding="utf-8", errors="replace") as fh:
                 n = next((i + 1 for i, line in enumerate(fh) if line.strip().startswith(f"{key}=")), None)
         except OSError:
             return None

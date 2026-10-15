@@ -6,9 +6,11 @@ loaded only when the TUI actually starts (via ``_make_app``), so every
 JSON verb runs on a bare interpreter. The executable ``dashboard.py``
 next to this package is a thin entry that calls ``dashboard.cli.main``.
 """
+
+from . import model, state
 from .app import _make_app
 from .cli import build_parser, main, run_tui, split_raw
-from .paths import DashboardError, SCHEMA_VERSION, best_fleet_report, meta_path, report_paths
+from .paths import SCHEMA_VERSION, DashboardError, best_fleet_report, meta_path, report_paths
 from .runner import audit_command, run_audit
 from .verbs import (
     VERBS,
@@ -22,9 +24,9 @@ from .verbs import (
 )
 
 __all__ = [
-    "DashboardError",
     "SCHEMA_VERSION",
     "VERBS",
+    "DashboardError",
     "Verb",
     "_make_app",
     "audit_command",
@@ -38,8 +40,10 @@ __all__ = [
     "dispatch",
     "main",
     "meta_path",
+    "model",
     "report_paths",
     "run_audit",
     "run_tui",
     "split_raw",
+    "state",
 ]

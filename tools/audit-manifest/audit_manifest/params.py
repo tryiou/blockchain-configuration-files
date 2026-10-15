@@ -8,7 +8,7 @@ helpers are the single place that routes to the right inspector.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable
 
 from .checkout import SourceCheckoutManager, SourceReader
 from .constants import logger
@@ -17,21 +17,21 @@ from .inspectors import (
     CommonParamCheckers,
     CppSourceInspector,
 )
+from .localcheck import ManifestCrossChecker
 from .model import (
     PARAM_STATUS_PRECEDENCE,
     CheckFinding,
+    CheckResult,
     FeePolicy,
     ManifestCoin,
     ParamAuditResult,
     ParamStatus,
+    max_status,
 )
-from .localcheck import ManifestCrossChecker
 from .versioning import VersionEngine
 
 
-def fee_constants_for_coin(
-    coin: ManifestCoin, src_dir: Path
-) -> Tuple[Optional[int], Optional[str], Optional[int], Optional[str]]:
+def fee_constants_for_coin(coin: ManifestCoin, src_dir: Path) -> tuple[int | None, str | None, int | None, str | None]:
     """Relay/dust constants via the coin's own layout (Go btcd vs C++)."""
     if coin.is_btcd:
         return BtcdSourceInspector.fee_constants(src_dir)
@@ -51,7 +51,8 @@ class ParamAuditEngine:
     def __init__(self, checkout_manager: SourceCheckoutManager):
         self.checkout_manager = checkout_manager
 
-    def audit_version(
+    # dispatch orchestrator: the full checker set reads in one place
+    def audit_version(  # noqa: PLR0913, PLR0915, PLR0917
         self,
         coin: ManifestCoin,
         repo_root: Path,
@@ -59,19 +60,10 @@ class ParamAuditEngine:
         wallet_conf: str,
         xbridge_conf: str,
         timeout: int,
+        *,
         fees_only: bool = False,
     ) -> ParamAuditResult:
-        shard = ManifestCoin(
-            ticker=coin.ticker,
-            ver_id=coin.ver_id,
-            blockchain=coin.blockchain,
-            repo_url=coin.repo_url,
-            versions=[version_tag],
-            wallet_conf=wallet_conf,
-            xbridge_conf=xbridge_conf,
-            daemon_family=coin.daemon_family,
-            daemon_stem=coin.daemon_stem,
-        )
+        shard = ParamAuditEngine._shard_for_version(coin, version_tag, wallet_conf, xbridge_conf)
 
         try:
             src_dir, mode = self.checkout_manager.resolve_source(shard, version_tag, timeout)
@@ -106,19 +98,21 @@ class ParamAuditEngine:
             rate, rate_ev, dust, dust_ev = BtcdSourceInspector.fee_constants(src_dir)
         else:
             rate, rate_ev, dust, dust_ev = CppSourceInspector.fee_constants(src_dir)
-        policy = fee_policy_for_coin(shard, src_dir) if src_dir else None
+        policy = fee_policy_for_coin(shard, src_dir)
 
-        checks: List[CheckFinding] = []
+        checks: list[CheckFinding] = []
 
-        def add_check(cid: str, func: Callable[..., Tuple[ParamStatus, str]], *args: Any) -> None:
+        def add_check(cid: str, func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+            fixable: str | None = None
             try:
-                st, det = func(*args)
+                # checker contract: (status, detail) or (status, detail, fixable kind)
+                st, det, fixable = CheckResult(*func(*args, **kwargs))
             except Exception as exc:
                 logger.exception("Checker %s failed for %s @ %s", cid, coin.ticker, version_tag)
                 msg = str(exc).lower()
                 st = ParamStatus.FAIL if ("not found" in msg or "no such file" in msg) else ParamStatus.WARN
                 det = f"checker error: {exc}"
-            checks.append(CheckFinding(id=cid, status=st, detail=det))
+            checks.append(CheckFinding(id=cid, status=st, detail=det, fixable=fixable))
 
         if is_btcd:
             add_check("PORT", BtcdSourceInspector.check_port, shard, src_dir, wc, repo_root)
@@ -138,13 +132,45 @@ class ParamAuditEngine:
             add_check("METHOD", CommonParamCheckers.check_method, shard, xc)
             add_check("STRUCT", BtcdSourceInspector.check_structure, shard, wc, xc)
         else:
-            add_check("PORT", CppSourceInspector.check_port, shard, src_dir, wc, want_test, repo_root)
-            add_check("RPCPORT-SOURCE", CppSourceInspector.check_rpcport_source, shard, src_dir, wc, want_test, repo_root)
+            add_check(
+                "PORT",
+                CppSourceInspector.check_port,
+                shard,
+                src_dir,
+                wc,
+                want_test=want_test,
+                repo_root=repo_root,
+            )
+            add_check(
+                "RPCPORT-SOURCE",
+                CppSourceInspector.check_rpcport_source,
+                shard,
+                src_dir,
+                wc,
+                want_test=want_test,
+                repo_root=repo_root,
+            )
             add_check("RPCPORT-XBRIDGE", CommonParamCheckers.check_rpcport_xbridge, shard, wc, xc, repo_root)
-            add_check("PREFIXES", CppSourceInspector.check_prefixes, shard, src_dir, xc, want_test, repo_root)
+            add_check(
+                "PREFIXES",
+                CppSourceInspector.check_prefixes,
+                shard,
+                src_dir,
+                xc,
+                want_test=want_test,
+                repo_root=repo_root,
+            )
             add_check("COIN", CppSourceInspector.check_coin, shard, src_dir, xc)
             add_check("TXVERSION", CppSourceInspector.check_txversion, shard, src_dir, xc)
-            add_check("BLOCKTIME", CppSourceInspector.check_blocktime, shard, src_dir, xc, want_test, repo_root)
+            add_check(
+                "BLOCKTIME",
+                CppSourceInspector.check_blocktime,
+                shard,
+                src_dir,
+                xc,
+                want_test=want_test,
+                repo_root=repo_root,
+            )
             add_check("FEES", CommonParamCheckers.check_fees, shard, src_dir, xc, rate, rate_ev, dust, dust_ev, policy)
             add_check("DUST", CommonParamCheckers.check_dust, shard, src_dir, xc, rate, rate_ev, dust, dust_ev, policy)
             add_check("DEPRECATEDRPC", CppSourceInspector.check_deprecatedrpc, shard, src_dir, wc, repo_root)
@@ -158,6 +184,41 @@ class ParamAuditEngine:
         if fees_only:
             checks = [c for c in checks if c.id in ("FEES", "DUST")]
 
+        return ParamAuditEngine._version_result(
+            version_tag=version_tag,
+            src_dir=src_dir,
+            mode=mode,
+            checks=checks,
+            wallet_conf=wallet_conf,
+            xbridge_conf=xbridge_conf,
+        )
+
+    @staticmethod
+    def _shard_for_version(coin: ManifestCoin, version_tag: str, wallet_conf: str, xbridge_conf: str) -> ManifestCoin:
+        """The same coin scoped to one version tag and its conf pair."""
+        return ManifestCoin(
+            ticker=coin.ticker,
+            ver_id=coin.ver_id,
+            blockchain=coin.blockchain,
+            repo_url=coin.repo_url,
+            versions=[version_tag],
+            wallet_conf=wallet_conf,
+            xbridge_conf=xbridge_conf,
+            daemon_family=coin.daemon_family,
+            daemon_stem=coin.daemon_stem,
+        )
+
+    @staticmethod
+    def _version_result(  # noqa: PLR0913  # the result row's fields, keyword-only at the call site
+        *,
+        version_tag: str,
+        src_dir: Path,
+        mode: str,
+        checks: list[CheckFinding],
+        wallet_conf: str,
+        xbridge_conf: str,
+    ) -> ParamAuditResult:
+        """Counts per attention status, then the row for this version."""
         nf = sum(1 for c in checks if c.status in (ParamStatus.FAIL, ParamStatus.BROKEN))
         nd = sum(1 for c in checks if c.status == ParamStatus.DIFFERS)
         nw = sum(1 for c in checks if c.status == ParamStatus.WARN)
@@ -182,6 +243,7 @@ class ParamAuditEngine:
         coin: ManifestCoin,
         repo_root: Path,
         timeout: int,
+        *,
         strict: bool = False,
         fees_only: bool = False,
     ) -> ParamAuditResult:
@@ -191,10 +253,18 @@ class ParamAuditEngine:
         if not entry_tag:
             return ParamAuditResult(tag=None, source=None, mode="no-tag")
 
-        entry_res = self.audit_version(coin, repo_root, entry_tag, coin.wallet_conf, coin.xbridge_conf, timeout, fees_only=fees_only)
+        entry_res = self.audit_version(
+            coin,
+            repo_root,
+            entry_tag,
+            coin.wallet_conf,
+            coin.xbridge_conf,
+            timeout,
+            fees_only=fees_only,
+        )
 
-        per_version_results: List[Dict[str, Any]] = []
-        seen_tags: Set[str] = set()
+        per_version_results: list[dict[str, Any]] = []
+        seen_tags: set[str] = set()
 
         for v in all_tags:
             if v in seen_tags:
@@ -212,67 +282,100 @@ class ParamAuditEngine:
                 pv = self.audit_version(coin, repo_root, v, wc, xc, timeout, fees_only=fees_only)
                 per_version_results.append(pv.to_dict())
 
-        # Check for reuse-drift (multiple versions share one conf file, but source constants diverged)
-        # If sharing is clean (no DIFFERS across the per-version fact-checks), emit a
-        # clarity INFO instead of staying silent. INFO does not increment warn
-        # counters and does not bubble under --strict-per-version (only WARN/FAIL bubble).
-        # Per-version clone/fact-check loop above stays intact — every tag is still
-        # individually checked via conf_pair_for_version.
         if len(all_tags) > 1:
-            uniq_wc = {p["wallet_conf"] for p in per_version_results}
-            uniq_xc = {p["xbridge_conf"] for p in per_version_results}
-            if len(uniq_wc) == 1 or len(uniq_xc) == 1:
-                any_differs = any(p.get("differs", 0) > 0 for p in per_version_results)
-                if any_differs:
-                    differs_by_version = ", ".join(
-                        f"{p['version']}:{p['differs']}DIFFERS"
-                        for p in per_version_results
-                        if p.get('differs')
-                    )
-                    detail = (
-                        f"reuse hides drift: {len(all_tags)} versions share conf pair "
-                        f"{next(iter(uniq_wc))} / {next(iter(uniq_xc))} but source constants diverged "
-                        f"(per-version DIFFERS: {differs_by_version})"
-                    )
-                    entry_res.checks.append(CheckFinding(id="REUSE-DRIFT", status=ParamStatus.WARN, detail=detail))
-                    entry_res.warn += 1
-                else:
-                    detail = (
-                        f"{len(all_tags)} versions share conf pair {next(iter(uniq_wc))} / {next(iter(uniq_xc))} — per-version fact-check clean"
-                    )
-                    entry_res.checks.append(CheckFinding(id="SHARED-CONF", status=ParamStatus.INFO, detail=detail))
+            _reuse_conf_checks(entry_res, per_version_results, all_tags)
 
         if strict:
-            worst_pv: Optional[ParamStatus] = None
-            for pv in per_version_results:
-                for chk in pv.get("checks", []):
-                    st = ParamStatus(chk["status"])
-                    if worst_pv is None or PARAM_STATUS_PRECEDENCE.index(st) < PARAM_STATUS_PRECEDENCE.index(worst_pv):
-                        worst_pv = st
-
-            # INFO/SKIP/PASS/MATCH never bubble — only WARN/FAIL (and DIFFERS/CONFLICT/BROKEN/UNRESOLVED) bubble per spec
-            if worst_pv in (ParamStatus.INFO, ParamStatus.SKIP, ParamStatus.PASS, ParamStatus.MATCH):
-                worst_pv = None
-
-            entry_worst: Optional[ParamStatus] = None
-            for chk in entry_res.checks:
-                if entry_worst is None or PARAM_STATUS_PRECEDENCE.index(chk.status) < PARAM_STATUS_PRECEDENCE.index(entry_worst):
-                    entry_worst = chk.status
-
-            if worst_pv and entry_worst and PARAM_STATUS_PRECEDENCE.index(worst_pv) < PARAM_STATUS_PRECEDENCE.index(entry_worst):
-                entry_res.checks.append(
-                    CheckFinding(
-                        id="STRICT-BUBBLE",
-                        status=worst_pv,
-                        detail=f"strict-per-version: worst per-version {worst_pv.value} bubbles to entry (was {entry_worst.value})",
-                    )
-                )
-                if worst_pv in (ParamStatus.FAIL, ParamStatus.BROKEN):
-                    entry_res.fail += 1
-                elif worst_pv == ParamStatus.DIFFERS:
-                    entry_res.differs += 1
-                elif worst_pv == ParamStatus.WARN:
-                    entry_res.warn += 1
+            _apply_strict_bubble(entry_res, per_version_results)
 
         entry_res.per_version = per_version_results
         return entry_res
+
+
+def _reuse_conf_checks(
+    entry_res: ParamAuditResult, per_version_results: list[dict[str, Any]], all_tags: list[str]
+) -> None:
+    """Reuse-drift: shared conf pair, diverged source constants.
+
+    If sharing is clean (no DIFFERS across the per-version fact-checks),
+    emit a clarity INFO instead of staying silent. INFO does not
+    increment warn counters and does not bubble under
+    --strict-per-version (only WARN/FAIL bubble).
+    """
+    # Check for reuse-drift (multiple versions share one conf file, but source constants diverged)
+    # If sharing is clean (no DIFFERS across the per-version fact-checks), emit a
+    # clarity INFO instead of staying silent. INFO does not increment warn
+    # counters and does not bubble under --strict-per-version (only WARN/FAIL bubble).
+    # Per-version clone/fact-check loop above stays intact — every tag is still
+    # individually checked via conf_pair_for_version.
+    uniq_wc = {p["wallet_conf"] for p in per_version_results}
+    uniq_xc = {p["xbridge_conf"] for p in per_version_results}
+    if len(uniq_wc) == 1 or len(uniq_xc) == 1:
+        any_differs = any(p.get("differs", 0) > 0 for p in per_version_results)
+        if any_differs:
+            differs_by_version = ", ".join(
+                f"{p['version']}:{p['differs']}DIFFERS" for p in per_version_results if p.get("differs")
+            )
+            detail = (
+                f"reuse hides drift: {len(all_tags)} versions share conf pair "
+                f"{next(iter(uniq_wc))} / {next(iter(uniq_xc))} but source constants diverged "
+                f"(per-version DIFFERS: {differs_by_version})"
+            )
+            entry_res.checks.append(CheckFinding(id="REUSE-DRIFT", status=ParamStatus.WARN, detail=detail))
+            entry_res.warn += 1
+        else:
+            detail = (
+                f"{len(all_tags)} versions share conf pair {next(iter(uniq_wc))} / "
+                f"{next(iter(uniq_xc))} — per-version fact-check clean"
+            )
+            entry_res.checks.append(CheckFinding(id="SHARED-CONF", status=ParamStatus.INFO, detail=detail))
+
+
+def _apply_strict_bubble(entry_res: ParamAuditResult, per_version_results: list[dict[str, Any]]) -> None:
+    """--strict-per-version: worst per-version status bubbles to the entry."""
+    worst_pv = _worst_per_version_status(per_version_results)
+
+    # INFO/SKIP/PASS/MATCH never bubble — only WARN/FAIL (and DIFFERS/CONFLICT/BROKEN/UNRESOLVED) bubble per spec
+    if worst_pv in (ParamStatus.INFO, ParamStatus.SKIP, ParamStatus.PASS, ParamStatus.MATCH):
+        worst_pv = None
+
+    entry_worst = _worst_finding_status(entry_res.checks)
+
+    if (
+        worst_pv
+        and entry_worst
+        and PARAM_STATUS_PRECEDENCE.index(worst_pv) < PARAM_STATUS_PRECEDENCE.index(entry_worst)
+    ):
+        entry_res.checks.append(
+            CheckFinding(
+                id="STRICT-BUBBLE",
+                status=worst_pv,
+                detail=(
+                    f"strict-per-version: worst per-version {worst_pv.value} bubbles to entry (was {entry_worst.value})"
+                ),
+            )
+        )
+        if worst_pv in (ParamStatus.FAIL, ParamStatus.BROKEN):
+            entry_res.fail += 1
+        elif worst_pv == ParamStatus.DIFFERS:
+            entry_res.differs += 1
+        elif worst_pv == ParamStatus.WARN:
+            entry_res.warn += 1
+
+
+def _worst_per_version_status(per_version_results: list[dict[str, Any]]) -> ParamStatus | None:
+    """Worst status across every per-version fact-check, None when there is none."""
+    worst: ParamStatus | None = None
+    for pv in per_version_results:
+        for chk in pv.get("checks", []):
+            st = ParamStatus(chk["status"])
+            worst = st if worst is None else max_status(worst, st)
+    return worst
+
+
+def _worst_finding_status(checks: list[CheckFinding]) -> ParamStatus | None:
+    """Worst status across one finding list, None when empty."""
+    worst: ParamStatus | None = None
+    for chk in checks:
+        worst = chk.status if worst is None else max_status(worst, chk.status)
+    return worst

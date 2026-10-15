@@ -11,3 +11,5 @@
 #   .venv/bin/python -m pytest tools/audit-manifest/tests/ -q
 #
 textual>=8.2,<9
+# Test/lint tooling, never needed at runtime: the lint-gate tests run ruff.
+ruff>=0.17

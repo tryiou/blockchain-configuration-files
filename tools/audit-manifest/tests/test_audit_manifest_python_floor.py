@@ -16,9 +16,12 @@ shims) is compiled by the current one, and the f-string structure is
 read back out of the token stream, which a 3.12+ tokenizer still
 exposes even though it accepts the construct.
 """
+
+import ast
 import inspect
 import io
 import tokenize
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -34,11 +37,7 @@ DASH_ENTRY = TOOL_DIR / "dashboard.py"
 # the inspectors subpackage), the dashboard package, and both shims the
 # operator actually runs. (Test infra — conftest.py, tests/ — is pytest's
 # to parse at collection, not part of this contract.)
-SOURCE_PATHS = (
-    sorted(PACKAGE_DIR.rglob("*.py"))
-    + sorted(DASHBOARD_DIR.rglob("*.py"))
-    + [SHIM_PATH, DASH_ENTRY]
-)
+SOURCE_PATHS = sorted(PACKAGE_DIR.rglob("*.py")) + sorted(DASHBOARD_DIR.rglob("*.py")) + [SHIM_PATH, DASH_ENTRY]
 
 
 def _quote_of(text: str):
@@ -109,6 +108,32 @@ def test_conf_key_line_is_not_wrapped_twice_in_staticmethod():
         "calling it raises TypeError: 'staticmethod' object is not callable "
         "on Python 3.9"
     )
-    assert callable(
-        getattr(audit.CommonParamCheckers, "_conf_key_line")
-    ), "_conf_key_line must stay callable through the class"
+    assert callable(audit.CommonParamCheckers._conf_key_line), "_conf_key_line must stay callable through the class"
+
+
+def test_no_decorator_is_applied_twice_to_the_same_function():
+    """No function in either package may carry a duplicated decorator.
+
+    Pinning one name is not enough: this exact defect reached the tree
+    through a bulk sweep that inserted its reason comment above a ``def``
+    and re-emitted the decorator the line already had, leaving two stacked
+    ``@staticmethod`` lines. A 3.12 parser accepts that silently —
+    ``staticmethod`` objects have been callable since 3.10 — while on the
+    3.9 floor the README promises, the call raises TypeError, which the
+    checker wrapper swallows into a silent WARN. So scan the whole surface.
+    """
+    offenders = []
+    for path in SOURCE_PATHS:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for dec, n in Counter(ast.unparse(d) for d in node.decorator_list).items():
+                if n > 1:
+                    offenders.append(f"{path}:{node.lineno} {node.name}(): {dec} applied {n}x")
+    assert not offenders, (
+        "a decorator is applied more than once to the same function: "
+        + "; ".join(offenders)
+        + " — on the Python 3.9 floor this tool declares support for, the call"
+        " raises TypeError, which the checker wrapper swallows into a silent WARN"
+    )

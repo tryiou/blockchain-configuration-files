@@ -8,12 +8,14 @@ Fix: W*== allows ')' and other non-word chars.
 
 Proof-first R9: this test must FAIL before fix and PASS after.
 """
+
 import re
 import tempfile
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 import audit_manifest as audit
+import audit_manifest.inspectors.cpp as cpp_mod
 
 CppSourceInspector = audit.CppSourceInspector
 ManifestCoin = audit.ManifestCoin
@@ -22,7 +24,7 @@ _CURRENT_CHAIN_CACHE = audit._CURRENT_CHAIN_CACHE
 
 
 def _lynx_tree(tmp_path: Path) -> Path:
-    """Hermetic source tree: what _current_chain parses plus a chain-gated
+    """Hermetic source tree: what current_chain parses plus a chain-gated
     nTime serialization guard — no real checkout, no skips.
 
     Intentionally parser-shaped: it pins the inspector's behavior, not
@@ -30,16 +32,14 @@ def _lynx_tree(tmp_path: Path) -> Path:
     The leading BITCOIN_DAEMON_NAME decoy exercises the '_' filter that
     must skip daemon-name assignments.
     """
-    (tmp_path / "autogen.sh").write_text(
-        "BITCOIN_DAEMON_NAME = bitcoind\nNAME = lynx\n", encoding="utf-8"
-    )
+    (tmp_path / "autogen.sh").write_text("BITCOIN_DAEMON_NAME = bitcoind\nNAME = lynx\n", encoding="utf-8")
     prim = tmp_path / "src" / "primitives"
     prim.mkdir(parents=True)
     (prim / "transaction.h").write_text(
         "struct CTransaction {\n"
         "    const uint32_t nTime;\n"
         "    template<typename Stream> void Serialize(Stream& s) const {\n"
-        "        if (std::string(CURRENT_CHAIN) == \"infiniloop\") {\n"
+        '        if (std::string(CURRENT_CHAIN) == "infiniloop") {\n'
         "            s >> tx.nTime;\n"
         "        }\n"
         "    }\n"
@@ -53,15 +53,18 @@ def test_current_chain_returns_lynx(tmp_path):
     # autogen.sh NAME=lynx is what the parser must pick up.
     src = _lynx_tree(tmp_path)
     _CURRENT_CHAIN_CACHE.clear()
-    chain = CppSourceInspector._current_chain(src)
+    chain = audit.current_chain(src)
     assert chain == "lynx", f"expected 'lynx' from autogen.sh, got {chain!r}"
 
 
 def test_guard_regex_handles_std_string_paren():
-    ctx = 'if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= g_infiniloopTransitionHeight) {'
+    ctx = (
+        'if (std::string(CURRENT_CHAIN) == "infiniloop" && g_currentValidatingBlockHeight <= '
+        "g_infiniloopTransitionHeight) {"
+    )
     # Fixed regex (W* allows ')' between CURRENT_CHAIN and ==)
     m = re.search(r"CURRENT_CHAIN\W*==\s*[\"']([^\"']+)[\"']", ctx)
-    assert m is not None, "regex should match std::string(CURRENT_CHAIN) == \"infiniloop\""
+    assert m is not None, 'regex should match std::string(CURRENT_CHAIN) == "infiniloop"'
     assert m.group(1) == "infiniloop"
     # Verify old buggy regex would FAIL (proof that bug existed)
     m_old = re.search(r"CURRENT_CHAIN\s*==\s*[\"']([^\"']+)[\"']", ctx)
@@ -71,8 +74,8 @@ def test_guard_regex_handles_std_string_paren():
 def test_check_txtime_lynx_match_not_warn(tmp_path):
     src = _lynx_tree(tmp_path)
     _CURRENT_CHAIN_CACHE.clear()
-    # Verify _current_chain first
-    chain = CppSourceInspector._current_chain(src)
+    # Verify current_chain first
+    chain = audit.current_chain(src)
     assert chain == "lynx"
 
     coin = ManifestCoin(ticker="LYNX", ver_id="lynx--v28.0.0")
@@ -91,9 +94,10 @@ def test_check_txtime_lynx_match_not_warn(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _synthetic_check_txtime(tmp_chain: str, guard_line: str, conf_val: str, src_dir_path=None):
-    """Helper: create temp src with synthetic transaction.h guard_line, mock _current_chain."""
+def _synthetic_check_txtime(tmp_chain: str, guard_line: str, conf_val: str):
+    """Helper: create temp src with synthetic transaction.h guard_line, mock current_chain."""
     import shutil
+
     tmp = Path(tempfile.mkdtemp())
     # create src/primitives/transaction.h
     (tmp / "src" / "primitives").mkdir(parents=True)
@@ -106,8 +110,8 @@ def _synthetic_check_txtime(tmp_chain: str, guard_line: str, conf_val: str, src_
     uint32_t nTime{{0}};
     """
     (tmp / "src" / "primitives" / "transaction.h").write_text(content)
-    # Also create dummy place for _current_chain if it would try to read autogen.sh – we mock it.
-    with mock.patch.object(CppSourceInspector, "_current_chain", return_value=tmp_chain.lower()):
+    # Also create dummy place for current_chain if it would try to read autogen.sh - we mock it.
+    with mock.patch.object(cpp_mod, "current_chain", return_value=tmp_chain.lower()):
         coin = ManifestCoin(ticker="TEST", ver_id="test--v1.0.0")
         status, detail = CppSourceInspector.check_txtime(coin, tmp, {"TxWithTimeField": conf_val})
     shutil.rmtree(tmp, ignore_errors=True)
@@ -115,28 +119,37 @@ def _synthetic_check_txtime(tmp_chain: str, guard_line: str, conf_val: str, src_
 
 
 def test_txtime_not_equal_guard_lynx_not_serialized():
-    # CURRENT_CHAIN != "lynx" with current=lynx -> guard_holds = (lynx != lynx)=False -> not serialized -> Tx false MATCH
+    # CURRENT_CHAIN != "lynx" with current=lynx -> guard_holds = (lynx != lynx)=False -> not serialized -> Tx false
+    # MATCH
     status, detail = _synthetic_check_txtime("lynx", 'if (CURRENT_CHAIN != "lynx") {', "false")
-    assert status == ParamStatus.MATCH, f"!= lynx with lynx should be NOT serialized -> MATCH for false, got {status} {detail}"
+    assert status == ParamStatus.MATCH, (
+        f"!= lynx with lynx should be NOT serialized -> MATCH for false, got {status} {detail}"
+    )
     assert "not serialized" in detail.lower() or "!=" in detail
 
 
 def test_txtime_std_string_not_equal_infiniloop_with_infiniloop():
     # std::string(CURRENT_CHAIN) != "infiniloop" with current=infiniloop -> False -> not serialized
     status, detail = _synthetic_check_txtime("infiniloop", 'if (std::string(CURRENT_CHAIN) != "infiniloop") {', "false")
-    assert status == ParamStatus.MATCH, f"!= infiniloop with infiniloop should be NOT serialized -> MATCH false, got {status} {detail}"
+    assert status == ParamStatus.MATCH, (
+        f"!= infiniloop with infiniloop should be NOT serialized -> MATCH false, got {status} {detail}"
+    )
 
 
 def test_txtime_case_mix_current_chain_equal_upper():
     # Current_Chain == "INFINILOOP" with mixed case, current lynx -> False -> not serialized
     status, detail = _synthetic_check_txtime("lynx", 'if (Current_Chain == "INFINILOOP") {', "false")
-    assert status == ParamStatus.MATCH, f"case-insensitive == INFINILOOP with lynx should be NOT serialized, got {status} {detail}"
+    assert status == ParamStatus.MATCH, (
+        f"case-insensitive == INFINILOOP with lynx should be NOT serialized, got {status} {detail}"
+    )
 
 
 def test_txtime_single_quote_not_equal_case_mix():
     # current_chain != 'Infiniloop' single quotes, current infiniloop -> False -> not serialized
     status, detail = _synthetic_check_txtime("infiniloop", "if (current_chain != 'Infiniloop') {", "false")
-    assert status == ParamStatus.MATCH, f"single-quote != Infiniloop with infiniloop should be NOT serialized, got {status} {detail}"
+    assert status == ParamStatus.MATCH, (
+        f"single-quote != Infiniloop with infiniloop should be NOT serialized, got {status} {detail}"
+    )
 
 
 def test_txtime_equal_still_match_for_lynx():
@@ -149,12 +162,15 @@ def test_txtime_not_equal_true_serialized():
     # != with lynx vs infiniloop -> True -> serialized -> true MATCH
     status, detail = _synthetic_check_txtime("lynx", 'if (CURRENT_CHAIN != "infiniloop") {', "true")
     # actual True, conf true -> MATCH or WARN if cond
-    assert status in (ParamStatus.MATCH, ParamStatus.WARN), f"!= infiniloop with lynx should be serialized -> true MATCH/WARN, got {status} {detail}"
+    assert status in (ParamStatus.MATCH, ParamStatus.WARN), (
+        f"!= infiniloop with lynx should be serialized -> true MATCH/WARN, got {status} {detail}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # btcd (Go) side of the same check: cite the struct field, not a comment
 # ---------------------------------------------------------------------------
+
 
 def _make_ntime_comment_tree(tmp_path):
     (tmp_path / "wire").mkdir(parents=True)

@@ -14,7 +14,13 @@ build_names = audit.build_update_version_names
 
 
 def test_identical_stems():
-    ver_id, wc, xc = build_names("DGB", "digibyte--v9.26.5", "digibyte--v9.26.5.conf", "digibyte--v9.26.5.conf", "v9.26.6")
+    ver_id, wc, xc = build_names(
+        "DGB",
+        "digibyte--v9.26.5",
+        "digibyte--v9.26.5.conf",
+        "digibyte--v9.26.5.conf",
+        "v9.26.6",
+    )
     assert ver_id == "digibyte--v9.26.6"
     assert wc == "digibyte--v9.26.6.conf"
     assert xc == "digibyte--v9.26.6.conf"
@@ -42,7 +48,7 @@ def test_lbc_override_requires_exact_lbcd_stem():
 def test_lbc_override_is_per_part():
     # Divergent xbridge stem under LBC ticker: wallet side takes lbcd
     # override, xbridge side keeps its own stem.
-    ver_id, wc, xc = build_names("LBC", "lbcd--v1", "lbcd--v1.conf", "other--v1.conf", "v2")
+    _ver_id, wc, xc = build_names("LBC", "lbcd--v1", "lbcd--v1.conf", "other--v1.conf", "v2")
     assert wc == "lbcd--v2.conf"
     assert xc == "other--v2.conf", f"divergent xbridge stem must survive LBC override: {xc!r}"
 
@@ -81,3 +87,135 @@ def test_additive_bump_is_idempotent():
     assert audit.apply_additive_bump(item, "v0.14.18.1") is True
     assert audit.apply_additive_bump(item, "v0.14.18.1") is False
     assert item["versions"] == ["v0.14.18.0", "v0.14.18.1"]
+
+
+def _probe_repos():
+    return {
+        "https://example.invalid/aaa": {
+            "status": "ALIVE",
+            "newer_same": ["v1.1.0"],
+            "newer_alt": [],
+            "remote_latest": "v1.1.0",
+            "entries": [{"ticker": "AAA"}],
+        }
+    }
+
+
+def test_versions_from_probe_slot_emits_bump_entries(tmp_path):
+    """P2: version bumps derive from a probe report, never a live probe."""
+    import argparse
+
+    from audit_manifest.fixes import plan_version_bumps
+
+    (tmp_path / "manifest-latest.json").write_text(
+        __import__("json").dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa--v1.0.conf",
+                    "xbridge_conf": "aaa--v1.0.conf",
+                }
+            ]
+        )
+    )
+    args = argparse.Namespace(update_versions=True, replace_versions=False, dry_run=True)
+    tickers, plan = plan_version_bumps(args, tmp_path / "manifest-latest.json", _probe_repos(), tmp_path)
+    assert tickers == ["AAA"]
+    assert plan[0]["key"] == "AAA.versions"
+    assert plan[0]["new"] == "v1.0.0, v1.1.0"
+    assert all(e["applied"] is False for e in plan)
+    assert __import__("json").loads((tmp_path / "manifest-latest.json").read_text())[0]["versions"] == ["v1.0.0"]
+
+
+def test_versions_from_unreadable_slot_notes_and_emits_none(tmp_path):
+    """P2: a missing probe slot is a notice, never a guess."""
+    from audit_manifest.fixes import read_probe_repos
+
+    repos, note = read_probe_repos(tmp_path / "nope.json")
+    assert repos == {}
+    assert note is not None and "nope.json" in note
+
+
+def test_hard_fork_repo_never_gets_bump_entry(tmp_path):
+    """P2: mandatory-HF repos stay manual under --versions-from too."""
+    import argparse
+
+    from audit_manifest.fixes import plan_version_bumps
+
+    (tmp_path / "manifest-latest.json").write_text(
+        __import__("json").dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa--v1.0.conf",
+                    "xbridge_conf": "aaa--v1.0.conf",
+                }
+            ]
+        )
+    )
+    repos = _probe_repos()
+    repos["https://example.invalid/aaa"]["changelog_mandatory"] = True
+    args = argparse.Namespace(update_versions=True, replace_versions=False, dry_run=True)
+    tickers, plan = plan_version_bumps(args, tmp_path / "manifest-latest.json", repos, tmp_path)
+    assert tickers == [] and plan == []
+
+
+def test_versions_from_flag_end_to_end_dry(tmp_path):
+    """P2: --versions-from plans bumps offline with the tree untouched."""
+    import json as _json
+
+    from audit_manifest import cli
+
+    (tmp_path / "manifest-latest.json").write_text(
+        _json.dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa--v1.0.conf",
+                    "xbridge_conf": "aaa--v1.0.conf",
+                }
+            ]
+        )
+    )
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "xbridge-confs").mkdir()
+    slot = tmp_path / "probe.json"
+    slot.write_text(
+        _json.dumps(
+            {
+                "repos": {
+                    "https://example.invalid/aaa": {
+                        "status": "ALIVE",
+                        "newer_same": ["v1.1.0"],
+                        "newer_alt": [],
+                        "remote_latest": "v1.1.0",
+                        "entries": [{"ticker": "AAA"}],
+                    }
+                }
+            }
+        )
+    )
+    report = tmp_path / "out.json"
+    rc = cli.main(
+        [
+            "--manifest",
+            str(tmp_path / "manifest-latest.json"),
+            "--local-only",
+            "--update-versions",
+            "--dry-run",
+            "--versions-from",
+            str(slot),
+            "--report",
+            str(report),
+        ]
+    )
+    assert rc == 0
+    payload = _json.loads(report.read_text())
+    assert payload["plan"][0]["key"] == "AAA.versions"
+    assert _json.loads((tmp_path / "manifest-latest.json").read_text())[0]["versions"] == ["v1.0.0"]

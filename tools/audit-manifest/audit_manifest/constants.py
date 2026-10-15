@@ -8,8 +8,8 @@ be monkeypatched into a different value by tests — paths are resolved from
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 import re
+from pathlib import Path
 
 logger = logging.getLogger("audit-manifest")
 
@@ -34,7 +34,8 @@ _CHANGELOG_CACHE_DIRNAME = ".changelog_cache"
 _PRERELEASE_RE = re.compile(r"(?i)(?:[-_.]?(?:beta|alpha|rc|pre|dev|snapshot|nightly)\d*)")
 
 _MANDATORY_HARDFORK_RE = re.compile(
-    r"(?i)(\bmandatory\b.*\b(hard.?fork|consensus|upgrade)\b|\bhard.?fork\b.*\bmandatory\b|\bmust upgrade\b|\ball nodes must\b)"
+    r"(?i)(\bmandatory\b.*\b(hard.?fork|consensus|upgrade)\b|\bhard.?fork\b.*\bmandatory\b|\bmust upgrade\b"
+    r"|\ball nodes must\b)"
 )
 _NEG_RE = re.compile(r"(?i)\bnon-mandatory\b|\bnot mandatory\b|does not change consensus|does not require.*upgrade")
 
@@ -42,10 +43,20 @@ _NEG_RE = re.compile(r"(?i)\bnon-mandatory\b|\bnot mandatory\b|does not change c
 # Fleet capability tables
 # ---------------------------------------------------------------------------
 
-CREATE_TX_METHODS = frozenset({
-    "BTC", "SYS", "BCH", "BCD", "DGB", "BTG", "DEVAULT", "STEALTH",
-    "XST", "PART",
-})
+CREATE_TX_METHODS = frozenset(
+    {
+        "BTC",
+        "SYS",
+        "BCH",
+        "BCD",
+        "DGB",
+        "BTG",
+        "DEVAULT",
+        "STEALTH",
+        "XST",
+        "PART",
+    }
+)
 
 # Blocknet consumer constants (blocknet/src/xbridge/xbridgewallet.h:97,102; xbridgeapp.cpp:1030)
 XMAX_LOCKTIME_DRIFT_BLOCKS = 4
@@ -69,8 +80,7 @@ FEE_REF_SIZE = 452
 # n=1..520 (100kB), plus ceil-step boundaries (999/1000/1998 families) so a
 # per-kB ceiling can never hide between two sweep points.
 FEE_SWEEP_SIZES = sorted(
-    {226, 260, 452, 998, 999, 1000, 1001, 1997, 1998, 1999}
-    | {192 * n + 102 for n in range(1, 521)}
+    {226, 260, 452, 998, 999, 1000, 1001, 1997, 1998, 1999} | {192 * n + 102 for n in range(1, 521)}
 )
 
 # ---------------------------------------------------------------------------
@@ -79,11 +89,9 @@ FEE_SWEEP_SIZES = sorted(
 
 PREFIX_SKIP_FMT = "{}: source {} not found in mainnet block (UNRESOLVED)"
 PREFIX_DECODE_COMPAT_FMT = (
-    "ScriptPrefix={}; source SCRIPT_ADDRESS={}, "
-    "decode-compat SCRIPT_ADDRESS2={}; encode site: {}"
+    "ScriptPrefix={}; source SCRIPT_ADDRESS={}, decode-compat SCRIPT_ADDRESS2={}; encode site: {}"
 )
 PREFIX_MINTED_SA2_OK_FMT = (
-    "ScriptPrefix={} matches minted SCRIPT_ADDRESS2; "
-    "SCRIPT_ADDRESS={} is legacy-decode only ({})"
+    "ScriptPrefix={} matches minted SCRIPT_ADDRESS2; SCRIPT_ADDRESS={} is legacy-decode only ({})"
 )
 PREFIX_MISMATCH_FMT = "{}: conf {} vs source {} ({}:{})"

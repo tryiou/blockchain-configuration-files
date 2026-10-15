@@ -1,0 +1,53 @@
+# ruff.toml — lint gate for the audit-manifest suite.
+# target-version tracks the suite's declared Python floor, enforced structurally by
+# tests/test_audit_manifest_python_floor.py.
+target-version = "py39"
+line-length = 120
+src = ["."]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "UP",   # pyupgrade
+    "C90",  # mccabe cyclomatic complexity
+    "RUF",  # ruff-specific rules
+    "PTH",  # flake8-use-pathlib
+    "RET",  # flake8-return
+    "PL",   # pylint (incl. PLR2004 magic values, PLR0913 too-many-args)
+    "TRY",  # tryceratops
+    "ARG",  # flake8-unused-arguments
+    "N",    # pep8-naming
+    "FBT",  # flake8-boolean-trap
+    "SLF",  # private-member access across module boundaries
+    "S",    # flake8-bandit
+]
+ignore = [
+    # Exception-message style: this suite deliberately raises with detailed,
+    # evidence-carrying inline messages (e.g. "chain_floor: unhandled rounding").
+    "TRY003",
+    # subprocess seam: every external call funnels through one runner that uses
+    # argv lists with shell=False (probe.py / checkout.py).
+    "S603",
+    "S607",
+]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.per-file-ignores]
+# Tests assert, use magic fixtures and framework-shaped signatures by design.
+# Tests legitimately reach into privates (pilot behaviour, fixture wiring) and use
+# function-level imports (Textual pilots, conditional fixtures); strictness for
+# SLF001/PLC0415 applies to shipped code only — src-side instances are all fixed.
+"tests/*" = ["ARG", "FBT", "N", "PLC0415", "PLR0913", "PLR0917", "PLR2004", "S101", "SLF001"]
+# Checker signatures are a uniform dispatch interface: ParamAuditEngine calls
+# every family checker with the same (coin, src_dir, confs) arguments whether or
+# not the individual checker reads them. The uniformity is the contract.
+"audit_manifest/inspectors/*" = ["ARG003", "ARG004"]
+# Vulture whitelist markers: bare attribute accesses are the point of the file.
+"vulture-whitelist.py" = ["B018", "SLF001"]
