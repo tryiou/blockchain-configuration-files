@@ -19,7 +19,10 @@ Family evidence (all from local source checkouts at BCF-supported tags):
 
 from pathlib import Path
 
+import pytest
+
 import audit_manifest as audit
+from audit_manifest.model import _ROUNDERS, chain_floor
 
 
 def _write(tree: Path, rel: str, text: str) -> Path:
@@ -217,6 +220,50 @@ def test_detect_go_fullrate_guard(tmp_path):
     assert pol.zero_guard == "full_rate", pol.evidence
 
 
+def _getfee_tree(tmp_path, body):
+    """A feerate.cpp whose GetFee body is exactly ``body``."""
+    _write(
+        tmp_path,
+        "src/policy/feerate.cpp",
+        f"#include <amount.h>\n\nCAmount CFeeRate::GetFee(size_t nBytes_) const\n{{\n{body}}}\n",
+    )
+    return tmp_path
+
+
+def test_detect_evaluatefee_up_is_ceil(tmp_path):
+    body = "    return EvaluateFeeUp(nSatoshisPerK, nBytes_);"
+    pol = audit.CppSourceInspector.fee_policy(_getfee_tree(tmp_path, body))
+    assert pol.rounding == "ceil", pol.evidence
+    assert any("EvaluateFeeUp" in e for e in pol.evidence), pol.evidence
+
+
+def test_detect_custom_stepsize_is_floor(tmp_path):
+    pol = audit.CppSourceInspector.fee_policy(
+        _getfee_tree(
+            tmp_path,
+            "    int steps = nBytes_ / FEE_INCREMENT_STEPSIZE;\n    return steps * nFeePerK;",
+        )
+    )
+    assert pol.rounding == "floor", pol.evidence
+    assert any("custom stepsize (floor-equivalent)" in e for e in pol.evidence), pol.evidence
+
+
+def test_detect_size_first_spelling_is_floor(tmp_path):
+    pol = audit.CppSourceInspector.fee_policy(
+        _getfee_tree(tmp_path, "    CAmount nFee = nSize * nSatoshisPerK / 1000;\n    return nFee;")
+    )
+    assert pol.rounding == "floor", pol.evidence
+
+
+def test_detect_renamed_rate_units_is_floor(tmp_path):
+    # WAGE nZensPerK / PIVX upiv: same truncating shape, renamed unit.
+    pol = audit.CppSourceInspector.fee_policy(
+        _getfee_tree(tmp_path, "    CAmount nFee = nZensPerK * nSize / 1000;\n    return nFee;")
+    )
+    assert pol.rounding == "floor", pol.evidence
+    assert any("renamed units" in e for e in pol.evidence), pol.evidence
+
+
 def _abc_tree(tree: Path) -> Path:
     # Bitcoin ABC idiom: template<bool ceil> split; relay GetFee -> <false>.
     _write(tree, "src/amount.cpp", "static const CAmount COIN = 100000000;\n")
@@ -341,3 +388,93 @@ def test_zero_rate_is_fail_not_pass(tmp_path):
         coin, tmp_path, {"MinTxFee": "0", "FeePerByte": "1"}, 0, "ev", None, None, pol
     )
     assert st == audit.ParamStatus.FAIL, det
+
+
+def _sweep_policies() -> dict[str, audit.FeePolicy]:
+    """One policy per rounding model, as the detectors build them."""
+    return {
+        "floor": audit.FeePolicy(rounding="floor"),
+        "floor_fullrate": audit.FeePolicy(rounding="floor", zero_guard="full_rate"),
+        "go_floor": audit.FeePolicy(rounding="go_floor"),
+        "literal_flat": audit.FeePolicy(rounding="literal_flat"),
+        "ceil": audit.FeePolicy(rounding="ceil"),
+        "ceil_step": audit.FeePolicy(rounding="ceil_step", kb_step=999, step_rate=100000),
+        "fixed_steps": audit.FeePolicy(rounding="fixed_steps", fixed_step_bytes=10240, fixed_step_fee=100),
+    }
+
+
+# Every rounding model at the boundaries a daemon can be asked about:
+# zero rate, zero size, sub-kB sweeps, the truncated-zero guard, a full
+# kB, and the step boundaries. The step-based models ignore rate by
+# shape (EMC GetMinFee, Verge flat step), so their column is constant.
+_SWEEP: list[tuple[str, int, int, int]] = [
+    ("floor", 0, 1000, 0),
+    ("floor", 1000, 0, 0),
+    ("floor", 1000, 250, 250),
+    ("floor", 1000, 191, 191),
+    ("floor", 1000000, 452, 452000),
+    ("floor", 1001, 1, 1),
+    ("floor", 999, 1, 1),
+    ("floor_fullrate", 999, 1, 999),
+    ("floor_fullrate", 1000, 250, 250),
+    ("go_floor", 0, 1000, 0),
+    ("go_floor", 1000, 0, 0),
+    ("go_floor", 1000, 250, 250),
+    ("go_floor", 1000, 191, 191),
+    ("go_floor", 1000000, 452, 452000),
+    ("go_floor", 999, 1, 999),
+    ("literal_flat", 0, 1000, 0),
+    ("literal_flat", 1000, 250, 250),
+    ("literal_flat", 1000000, 452, 452000),
+    ("literal_flat", 999, 1, 999),
+    ("ceil", 0, 1000, 0),
+    ("ceil", 1000, 0, 0),
+    ("ceil", 1000, 250, 250),
+    ("ceil", 1000, 191, 191),
+    ("ceil", 1000000, 452, 452000),
+    ("ceil", 1001, 1, 2),
+    ("ceil", 999, 1, 1),
+    ("ceil_step", 1000, 0, 0),
+    ("ceil_step", 0, 1000, 200000),
+    ("ceil_step", 1000, 1, 100000),
+    ("ceil_step", 1000, 999, 100000),
+    ("ceil_step", 1000, 1000, 200000),
+    ("ceil_step", 1000000, 452, 100000),
+    ("fixed_steps", 1000, 0, 100),
+    ("fixed_steps", 1, 1, 100),
+    ("fixed_steps", 1000000, 452, 100),
+    ("fixed_steps", 1000, 10240, 200),
+    ("fixed_steps", 1000, 20481, 300),
+]
+
+
+@pytest.mark.parametrize(("key", "rate", "size", "expected"), _SWEEP)
+def test_rounder_sweep_returns_exact_floors(key, rate, size, expected):
+    """chain_floor is the fund-loss gate: each rounding model returns the
+    exact daemon floor at the sweep boundaries, never a rounded guess."""
+    assert chain_floor(_sweep_policies()[key], rate, size) == expected
+
+
+def test_sweep_covers_every_rounding_model():
+    """A new rounding model lands with sweep coverage or this fails."""
+    covered = {key for key, *_ in _SWEEP}
+    assert set(_ROUNDERS) <= covered, f"rounding models without sweep cases: {set(_ROUNDERS) - covered}"
+
+
+def test_full_rate_shapes_share_one_intrinsic_guard():
+    """go_floor and literal_flat are one handler with an intrinsic guard.
+
+    Both source idioms emit the whole minRelayTxFee on a truncated-zero
+    product (btcd calcMinRequiredTxRelayFee; old-stack literal relay),
+    and their detectors always set zero_guard="full_rate". The guard is
+    not policy-read: an explicitly one-sat policy must still get the
+    full rate, or the floor would silently drop to one satoshi.
+    """
+    assert _ROUNDERS["go_floor"] is _ROUNDERS["literal_flat"]
+    assert chain_floor(audit.FeePolicy(rounding="go_floor"), 999, 1) == 999
+    assert chain_floor(audit.FeePolicy(rounding="literal_flat"), 999, 1) == 999
+
+
+def test_unknown_rounding_raises_rather_than_defaulting():
+    with pytest.raises(ValueError, match="unhandled rounding"):
+        chain_floor(audit.FeePolicy(rounding="mystery"), 1000, 250)

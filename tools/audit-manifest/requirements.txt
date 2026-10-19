@@ -1,15 +1,21 @@
 # Optional dependencies for audit-manifest/dashboard.py.
 #
-# The Textual TUI is the ONLY thing in this directory that needs anything
-# beyond the Python standard library: audit-manifest.py and every JSON verb
-# of dashboard.py run on a bare interpreter. Install this file into a venv
-# dedicated to this tool if you want the TUI (and the TUI's tests). From the
-# repository root (the directory holding manifest-latest.json):
+# The Textual TUI is the only runtime dependency beyond the Python standard
+# library: audit-manifest.py and every JSON verb of dashboard.py run on a bare
+# interpreter. Install this file into a venv dedicated to this tool if you
+# want the TUI (and the TUI's tests). From the repository root (the directory
+# holding manifest-latest.json):
 #
 #   python3 -m venv .venv
 #   .venv/bin/pip install pytest -r tools/audit-manifest/requirements.txt
 #   .venv/bin/python -m pytest tools/audit-manifest/tests/ -q
 #
 textual>=8.2,<9
-# Test/lint tooling, never needed at runtime: the lint-gate tests run ruff.
+# Test/lint tooling, never needed at runtime: the lint-gate tests run ruff
+# and mypy (without mypy installed the two type-gate tests skip silently).
 ruff>=0.17
+# The two mypy gates assert exact diagnostics (zero engine findings, a counted
+# dashboard baseline), so they are calibrated to the mypy that runs them: a
+# mypy that shifts the counts fails the suite — re-calibrate the baseline in
+# tests/test_audit_manifest_lint_gate.py deliberately when that happens.
+mypy>=2.4,<3

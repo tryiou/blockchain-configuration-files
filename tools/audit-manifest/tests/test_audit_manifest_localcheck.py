@@ -58,6 +58,19 @@ def test_missing_base_j2_is_reported(tmp_path: Path):
     assert out["missing_base_j2"] == ["AAA"]
 
 
+def test_missing_base_j2_message_names_the_lowercase_template(tmp_path: Path, capsys):
+    """The line must name the template the check actually looked for.
+
+    base.j2 files are lowercase, so printing the ticker names a file that does
+    not exist on a case-sensitive filesystem and sends the operator hunting.
+    """
+    manifest = _repo(tmp_path, j2=False)
+    crosscheck_local(manifest, [_coin()])
+    out = capsys.readouterr().out
+    assert "aaa.base.j2" in out
+    assert "AAA.base.j2" not in out
+
+
 def test_orphan_confs_are_informational(tmp_path: Path):
     manifest = _repo(tmp_path)
     (tmp_path / "wallet-confs" / "ghost--v9.conf").write_text("port=1\n", encoding="utf-8")

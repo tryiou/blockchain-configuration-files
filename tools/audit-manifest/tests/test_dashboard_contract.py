@@ -26,6 +26,35 @@ import dashboard as dash
 DASH_PATH = Path(__file__).resolve().parents[1] / "dashboard.py"
 
 
+def test_default_manifest_name_matches_the_engine():
+    """The dashboard and the engine must name the default manifest alike.
+
+    Plan entries and appliers compare the manifest's repo-relative name,
+    so a dashboard that drifted from the engine's spelling would silently
+    misroute every manifest entry the dashboard launches a run for.
+    """
+    from audit_manifest.constants import DEFAULT_MANIFEST_NAME
+
+    assert dash.paths.DEFAULT_MANIFEST_NAME == DEFAULT_MANIFEST_NAME
+    assert dash.paths.DEFAULT_MANIFEST.name == DEFAULT_MANIFEST_NAME
+
+
+def test_last_run_scope_reads_a_flag_looking_ticker_as_no_coins():
+    """`--ticker --report` is a scope the engine matches no coin to.
+
+    argparse consumes the next token verbatim, so the scope line must not
+    count the mis-consumed flag as a coin. The slot decision keeps the
+    faithful string — the engine would run the same scope — but the
+    display says the truth.
+    """
+    assert dash.model._last_run_scope(["--ticker", "AAA,BBB"]) == "2 coins"
+    assert dash.model._last_run_scope(["--ticker", "AAA"]) == "1 coin"
+    assert dash.model._last_run_scope(["--ticker", "--report"]) == "scope matched no coins"
+    assert dash.model._last_run_scope(["--local-only"]) == "full fleet"
+    # The slot-facing read stays faithful to the engine's own parse.
+    assert dash.model.argv_tickers(["--ticker", "--report"]) == "--report"
+
+
 # ---------------------------------------------------------------------------
 # Subprocess-level CLI contract
 # ---------------------------------------------------------------------------
@@ -270,6 +299,53 @@ def test_scaffold_without_apply_is_a_preview():
     assert dash.decide_exit(verb, opts, [{"applied": False}]) == 1
     opts.apply = True
     assert dash.decide_exit(verb, opts, [{"applied": True}]) == 0
+
+
+def test_live_write_with_an_empty_plan_needs_a_clean_engine_exit():
+    """An empty plan is "nothing to decide" only when the engine exited clean.
+
+    A write verb that planned no rows but whose run failed refused before it
+    could do anything (unresolvable source, a refused target) — that is still
+    a pending decision, not success.
+    """
+    verb = dash.VERBS["apply-fix"]
+    opts = dash.default_opts("apply-fix")
+    assert dash.decide_exit(verb, opts, [], audit_exit=0) == 0
+    assert dash.decide_exit(verb, opts, [], audit_exit=1) == 1
+
+
+def test_live_write_that_refused_before_planning_exits_1(capsys, tmp_path, monkeypatch):
+    """``scaffold --apply`` that fails with an empty plan must not read as success.
+
+    The engine can refuse before deriving a single entry (an unresolvable fee
+    source), exiting non-zero with an empty plan. The envelope must report the
+    pending decision (exit 1), never the success code.
+    """
+    monkeypatch.setattr(dash.paths, "LOG_STREAM", sys.stderr)
+    monkeypatch.setattr(dash.paths, "CACHE_ROOT", tmp_path)
+    monkeypatch.setattr(dash.paths, "LAST_REPORT", tmp_path / "last-run.json")
+    monkeypatch.setattr(dash.paths, "LAST_META", tmp_path / "last-run.meta.json")
+
+    def _refused(cmd, log_path, *_args, **_kwargs):
+        report = Path(cmd[cmd.index("--report") + 1])
+        report.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "findings": [],
+                    "plan": [],
+                    "scaffold": {"mode": "scaffold", "applied": False, "error": "fee source unresolvable"},
+                    "meta": {},
+                    "summary": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {"returncode": 1, "duration": 0.0, "log": str(log_path)}
+
+    monkeypatch.setattr(dash.runner, "run_audit", _refused)
+    assert dash.main(["scaffold", "--repo-url", "https://example.invalid/aaa", "--apply"]) == 1
+    assert "Traceback" not in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

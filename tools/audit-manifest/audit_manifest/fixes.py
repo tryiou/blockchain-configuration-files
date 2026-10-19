@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
-from .apply_plan import apply_entries, key_present
+from .apply_plan import apply_entries, key_present, manifest_target
 from .checkout import SourceCheckoutManager, SourceReader
 from .constants import FEE_REF_SIZE, logger
 from .model import ManifestCoin, chain_floor, recommended_fees
@@ -38,7 +38,7 @@ class ConfigAutoFixer:
     """Applies safe in-place fixes to wallet/XBridge configuration files."""
 
     @staticmethod
-    def plan_missing_txindex(repo_root: Path, coin: ManifestCoin) -> tuple:
+    def plan_missing_txindex(repo_root: Path, coin: ManifestCoin) -> tuple[list[dict[str, Any]], str | None]:
         wpath = repo_root / "wallet-confs" / coin.wallet_conf
         try:
             txt = SourceReader.slurp(wpath)
@@ -63,7 +63,7 @@ class ConfigAutoFixer:
         return [], None
 
     @staticmethod
-    def plan_normalize_dust(repo_root: Path, coin: ManifestCoin) -> tuple:
+    def plan_normalize_dust(repo_root: Path, coin: ManifestCoin) -> tuple[list[dict[str, Any]], str | None]:
         xpath = repo_root / "xbridge-confs" / coin.xbridge_conf
         try:
             txt = SourceReader.slurp(xpath)
@@ -92,7 +92,7 @@ class ConfigAutoFixer:
         return [], None
 
     @staticmethod
-    def plan_remove_deprecatedrpc(repo_root: Path, coin: ManifestCoin) -> tuple:
+    def plan_remove_deprecatedrpc(repo_root: Path, coin: ManifestCoin) -> tuple[list[dict[str, Any]], str | None]:
         wpath = repo_root / "wallet-confs" / coin.wallet_conf
         try:
             txt = SourceReader.slurp(wpath)
@@ -122,7 +122,7 @@ class ConfigAutoFixer:
     @staticmethod
     def plan_fee_margin(  # noqa: C901, PLR0911  # fee planner: each return is a distinct resolve/parse refusal, logged before it
         repo_root: Path, coin: ManifestCoin
-    ) -> tuple:
+    ) -> tuple[list[dict[str, Any]], str | None]:
         try:
             mgr = SourceCheckoutManager()
             tag = VersionEngine.max_version_tag(set(coin.versions)) if coin.versions else ""
@@ -248,20 +248,27 @@ _FIXABLE_PLANNERS = {
 }
 
 
-def _execute_plan(plan: list[dict[str, Any]], repo_root: Path, runner: SystemCommandRunner, prefix: str) -> None:
+def _execute_plan(
+    plan: list[dict[str, Any]],
+    repo_root: Path,
+    runner: SystemCommandRunner,
+    prefix: str,
+    manifest_path: Path | None = None,
+) -> None:
     """Execute the reviewed entries, then report per-entry refusals."""
-    apply_entries(plan, repo_root, runner, regenerate=False)
+    apply_entries(plan, repo_root, runner, regenerate=False, manifest_path=manifest_path)
     for e in plan:
         if not e.get("applied"):
             report_line(f"{prefix}refused {e.get('coin')}: {e.get('file')} {e.get('key')} — {e.get('error')}")
 
 
-def apply_conf_fixes(
+def apply_conf_fixes(  # noqa: PLR0913, PLR0917  # fix-aggregator inputs: one per fix knob
     args: argparse.Namespace,
     manifest: list[ManifestCoin],
     param_results: dict[str, Any] | None,
     repo_root: Path,
     runner: SystemCommandRunner,
+    manifest_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Derive --write-config / --fee-write fixes from param findings.
 
@@ -295,7 +302,7 @@ def apply_conf_fixes(
 
     if dry_run:
         return plan
-    _execute_plan(plan, repo_root, runner, "  ")
+    _execute_plan(plan, repo_root, runner, "  ", manifest_path)
     return plan
 
 
@@ -506,6 +513,7 @@ def apply_port_fixes(  # noqa: PLR0913, PLR0917  # fix inputs: one per fix knob
     repo_root: Path,
     runner: SystemCommandRunner,
     fleet_manifest: list[ManifestCoin] | None = None,
+    manifest_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Apply --fix-ports reallocation (earliest lineage survives).
 
@@ -554,13 +562,13 @@ def apply_port_fixes(  # noqa: PLR0913, PLR0917  # fix inputs: one per fix knob
 
         if dry_run:
             return plan
-        _execute_plan(plan, repo_root, runner, "  ")
+        _execute_plan(plan, repo_root, runner, "  ", manifest_path)
         return plan
 
     return plan
 
 
-def read_probe_repos(path: Path) -> tuple:
+def read_probe_repos(path: Path) -> tuple[dict[str, Any], str | None]:
     """Repos section of a probe report for --versions-from.
 
     Returns ``(repos, note)``: an unreadable or wrong-shaped slot
@@ -576,11 +584,16 @@ def read_probe_repos(path: Path) -> tuple:
     return repos, None
 
 
-def plan_delist_entries(coin: ManifestCoin, repo_root: Path) -> tuple:
+def plan_delist_entries(
+    coin: ManifestCoin,
+    repo_root: Path,
+    manifest_path: Path | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
     """Removal entries for one coin: manifest splice plus every coin file."""
+    manifest_rel = repo_relative(manifest_target(repo_root, manifest_path), repo_root)
     entries: list[dict[str, Any]] = [
         plan_entry(
-            "manifest-latest.json",
+            manifest_rel,
             coin.ticker,
             coin.ver_id,
             None,
@@ -620,13 +633,15 @@ def plan_delist_entries(coin: ManifestCoin, repo_root: Path) -> tuple:
 
 
 def _collapse_plan_entries(
-    item: dict[str, Any], ticker: str, target: str, repo_root: Path
+    item: dict[str, Any], ticker: str, target: str, repo_root: Path, manifest_path: Path | None = None
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Collapse one manifest item to target: rename confs, copy them forward.
 
-    Returns (plan entries, report lines). The rename entry is always
+    Returns (plan entries, report lines). The collapse entry is always
     first; each conf copy follows only when the target does not exist
-    yet, and an existing target is reported rather than overwritten.
+    yet, and an existing target is reported rather than overwritten. Once
+    the conf is copied its superseded original is planned for removal, so
+    the rename completes instead of leaving an orphan behind.
     """
     old_ver_id = item.get("ver_id", "")
     old_wc = item.get("wallet_conf", "")
@@ -634,7 +649,7 @@ def _collapse_plan_entries(
     new_ver_id, new_wc, new_xc = build_update_version_names(ticker, old_ver_id, old_wc, old_xc, target)
     entries: list[dict[str, Any]] = []
     collapse = plan_entry(
-        "manifest-latest.json",
+        repo_relative(manifest_target(repo_root, manifest_path), repo_root),
         f"{ticker}",
         f"{old_ver_id} ({old_wc}, {old_xc})",
         f"{new_ver_id} ({new_wc}, {new_xc})",
@@ -675,6 +690,20 @@ def _collapse_plan_entries(
         elif dst_p.is_file():
             notes.append(
                 f"  UPDATE-VERSIONS {ticker}: target {dst_p.name} already exists — kept as-is (verify content)"
+            )
+        if src_p.is_file() and src_p != dst_p:
+            entries.append(
+                plan_entry(
+                    repo_relative(src_p, repo_root),
+                    "-",
+                    src_p.name,
+                    None,
+                    f"remove superseded {label} conf after the rename",
+                    "versions",
+                    coin=ticker,
+                    ver_id=new_ver_id,
+                    applied=False,
+                )
             )
     return entries, notes
 
@@ -731,7 +760,7 @@ def plan_version_bumps(  # noqa: C901, PLR0912  # deep derivation nest: additive
                                     updated_tickers.append(ticker)
                                     plan.append(
                                         plan_entry(
-                                            "manifest-latest.json",
+                                            repo_relative(manifest_target(repo_root, manifest_path), repo_root),
                                             f"{ticker}.versions",
                                             ", ".join(old_versions),
                                             ", ".join(item.get("versions") or []),
@@ -749,7 +778,9 @@ def plan_version_bumps(  # noqa: C901, PLR0912  # deep derivation nest: additive
                                 and item.get("ver_id", "").endswith(target)
                             ):
                                 continue
-                            collapse_entries, collapse_notes = _collapse_plan_entries(item, ticker, target, repo_root)
+                            collapse_entries, collapse_notes = _collapse_plan_entries(
+                                item, ticker, target, repo_root, manifest_path
+                            )
                             plan.extend(collapse_entries)
                             for note in collapse_notes:
                                 report_line(note)
@@ -784,13 +815,25 @@ def apply_version_bumps(
                     f"  UPDATE-VERSIONS {e.get('coin')}: {label} conf "
                     f"{str(e.get('new') or '')[len('copy of ') :]} -> {Path(rel).name} (planned)"
                 )
+            elif e.get("action") == "versions" and e.get("key") == "-":
+                rel = str(e.get("file") or "")
+                report_line(f"  UPDATE-VERSIONS {e.get('coin')}: remove superseded conf {Path(rel).name} (planned)")
         if updated_tickers:
             report_line(f"\nUPDATE-VERSIONS: {verb} {', '.join(sorted(set(updated_tickers)))} to latest remote")
             report_line("UPDATE-VERSIONS: dry-run — manifest and confs left untouched")
         return plan
-    _execute_plan(plan, repo_root, runner, "  UPDATE-VERSIONS ")
-    if updated_tickers:
-        report_line(f"\nUPDATE-VERSIONS: {verb} {', '.join(sorted(set(updated_tickers)))} to latest remote")
+    _execute_plan(plan, repo_root, runner, "  UPDATE-VERSIONS ", manifest_path)
+    # The summary gates the operator follow-up below, so it reports what the
+    # applier actually wrote. Only the entry that writes this run's manifest
+    # proves a coin moved: the conf copy and the superseded-conf removal carry
+    # the same coin but are side effects, so a refused collapse — or a plan
+    # aimed at another manifest — is never a bumped coin.
+    manifest_rel = repo_relative(manifest_target(repo_root, manifest_path), repo_root)
+    bumped = sorted(
+        {str(e.get("coin")) for e in plan if e.get("applied") and e.get("coin") and e.get("file") == manifest_rel}
+    )
+    if bumped:
+        report_line(f"\nUPDATE-VERSIONS: {verb} {', '.join(bumped)} to latest remote")
         if args.replace_versions:
             report_line(
                 "UPDATE-VERSIONS: confs copied verbatim — re-run --param-check for bumped tickers (relay/fees "
@@ -799,10 +842,17 @@ def apply_version_bumps(
             report_line(
                 "  changelog probe covers the 5 newest tags only, so an older mandatory HF needs manual review)"
             )
-            report_line(
-                "UPDATE-VERSIONS: superseded old conf files are left on disk — git rm them in "
-                "blockchain-configuration-files once verified"
-            )
+            removals = [e for e in plan if e.get("action") == "versions" and e.get("key") == "-"]
+            still_on_disk = [
+                e for e in removals if not e.get("applied") and (repo_root / str(e.get("file") or "")).is_file()
+            ]
+            if still_on_disk:
+                report_line("UPDATE-VERSIONS: superseded confs are still on disk — see the refusals above")
+            elif removals and all(e.get("applied") for e in removals):
+                report_line(
+                    "UPDATE-VERSIONS: superseded old conf files are gone — the rename is complete "
+                    "(git history keeps the previous conf)"
+                )
         else:
             report_line(
                 "UPDATE-VERSIONS: old versions kept buildable on existing confs — "

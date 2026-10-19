@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -136,24 +137,44 @@ def _tags(value: Any) -> str:
     return "—"
 
 
+def argv_tickers(raw: Sequence[str]) -> str | None:
+    """The ``--ticker`` value in an argv list, either spelling.
+
+    The last occurrence wins, mirroring how the engine's own parser
+    resolves a repeated flag. Both the cache-slot decision and the
+    last-run scope line read this, so a smuggled ``--ticker`` scopes the
+    run identically however it arrived.
+    """
+    tickers: str | None = None
+    args = list(raw)
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--ticker" and i + 1 < len(args):
+            tickers = args[i + 1]
+            i += 2
+        elif arg.startswith("--ticker="):
+            tickers = arg.split("=", 1)[1]
+            i += 1
+        else:
+            i += 1
+    return tickers
+
+
 def _last_run_scope(argv: Any) -> str:
     """Scope of the last run from its recorded argv: full fleet, or N coins."""
     args = argv if isinstance(argv, list) else []
-    raw: str | None = None
-    if "--ticker" in args:
-        i = args.index("--ticker")
-        if i + 1 < len(args) and isinstance(args[i + 1], str):
-            raw = args[i + 1]
-    if raw is None:
-        for arg in args:
-            if isinstance(arg, str) and arg.startswith("--ticker="):
-                raw = arg.split("=", 1)[1]
-                break
+    raw = argv_tickers(args)
     if not raw:
         return "full fleet"
     tickers = [t for t in raw.split(",") if t.strip()]
     if not tickers:
         return "full fleet"
+    # argparse consumes the token after --ticker verbatim, so a
+    # flag-looking value is a mis-scoped run the engine matches no coin
+    # to; counting it as a coin would overstate the scope.
+    if any(t.startswith("-") for t in tickers):
+        return "scope matched no coins"
     n = len(tickers)
     return f"{n} coin{'s' if n != 1 else ''}"
 
@@ -509,23 +530,31 @@ def _counts_ports(report: dict[str, Any]) -> str:
     return f"{n} collision{'s' if n != 1 else ''}" if n else "no collisions"
 
 
+def cross_check_counts(local: dict[str, Any]) -> tuple[int, int]:
+    """(missing, orphaned) counts from a cross-check report's local slot.
+
+    The cross-check verb and the overview ledger both show these two
+    buckets; one implementation keeps the numbers identical.
+    """
+    missing = sum(
+        len(entries)
+        for key in ("missing_wallet_conf", "missing_xbridge_conf", "missing_base_j2")
+        for entries in [local.get(key)]
+        if isinstance(entries, list)
+    )
+    orphans = local.get("orphans")
+    orphaned = (
+        sum(len(entries) for entries in orphans.values() if isinstance(entries, list))
+        if isinstance(orphans, dict)
+        else 0
+    )
+    return missing, orphaned
+
+
 def _counts_cross_check(report: dict[str, Any]) -> str:
     """Cross-check reports its two local-consistency buckets."""
     local = report.get("local")
-    missing, orphaned = 0, 0
-    if isinstance(local, dict):
-        missing = sum(
-            len(entries)
-            for key in ("missing_wallet_conf", "missing_xbridge_conf", "missing_base_j2")
-            for entries in [local.get(key)]
-            if isinstance(entries, list)
-        )
-        orphans = local.get("orphans")
-        orphaned = (
-            sum(len(entries) for entries in orphans.values() if isinstance(entries, list))
-            if isinstance(orphans, dict)
-            else 0
-        )
+    missing, orphaned = cross_check_counts(local) if isinstance(local, dict) else (0, 0)
     return f"missing {missing} · orphans {orphaned}" if missing or orphaned else "clean, nothing to decide"
 
 

@@ -141,14 +141,15 @@ def _local_findings(local: dict[str, Any], add: Callable[..., None]) -> None:
             file=f"xbridge-confs/{xc}",
         )
     for ticker in sorted(set(local.get("missing_base_j2", []))):
+        j2_name = f"{(ticker or '').lower()}.base.j2"
         add(
             "WARN",
             "local",
             ticker,
             None,
             "MISSING-BASE-J2",
-            f"autobuild/configs/{ticker}.base.j2 does not exist",
-            file=f"autobuild/configs/{ticker}.base.j2",
+            f"autobuild/configs/{j2_name} does not exist",
+            file=f"autobuild/configs/{j2_name}",
         )
     for dname, orphs in (local.get("orphans") or {}).items():
         for stem in sorted(set(orphs)):

@@ -19,6 +19,7 @@ from typing import Any, NamedTuple
 from urllib.parse import urlparse
 
 from . import paths, runner
+from .model import argv_tickers
 from .paths import (
     DashboardError,
     read_json,
@@ -279,7 +280,52 @@ def default_opts(verb: str) -> argparse.Namespace:
 
 
 # argv builder: one branch per flag implication
-def build_audit_argv(opts: argparse.Namespace, raw: Sequence[str]) -> list[str]:  # noqa: C901, PLR0912
+# Mode switches: each verb has one documented default mode; a flag widens
+# it in the direction the flag name implies and never narrows it silently.
+# Each row is (opts attribute, engine flag, how): "drop" removes the flag
+# the verb's base carries, "append" widens the base with it. Order is the
+# argv order.
+_MODE_SWITCHES: tuple[tuple[str, str, str], ...] = (
+    ("with_probe", "--local-only", "drop"),
+    ("local_only", "--local-only", "append"),
+    ("with_changelog", "--no-changelog", "drop"),
+    ("param_check", "--param-check", "append"),
+    ("fees_only", "--fees-only", "append"),
+    ("dry_run", "--dry-run", "append"),
+    ("replace_versions", "--replace-versions", "append"),
+    ("with_versions", "--update-versions", "append"),
+)
+
+
+def _apply_mode_switches(opts: argparse.Namespace, base: list[str]) -> None:
+    """Fold the set mode flags into the verb's base argv, in place."""
+    for attr, flag, how in _MODE_SWITCHES:
+        if not getattr(opts, attr, False):
+            continue
+        if how == "drop" and flag in base:
+            base.remove(flag)
+        elif how == "append" and flag not in base:
+            base.append(flag)
+
+
+def _scaffold_argv(opts: argparse.Namespace, argv: list[str], base: list[str]) -> None:
+    """The scaffold verb's own flags, appended in argv order."""
+    if not opts.repo_url:
+        raise DashboardError("the scaffold verb requires --repo-url <url>")
+    argv += ["--repo-url", opts.repo_url]
+    for flag, value in (
+        ("--scaffold-ticker", opts.scaffold_ticker),
+        ("--scaffold-tag", opts.scaffold_tag),
+        ("--scaffold-name", opts.scaffold_name),
+        ("--scaffold-out-dir", opts.scaffold_out_dir),
+    ):
+        if value:
+            argv += [flag, value]
+    if opts.apply:
+        base.append("--apply")
+
+
+def build_audit_argv(opts: argparse.Namespace, raw: Sequence[str]) -> list[str]:
     """Translate a verb plus its flags into audit-manifest.py arguments."""
     verb = VERBS[opts.verb]
 
@@ -294,42 +340,12 @@ def build_audit_argv(opts: argparse.Namespace, raw: Sequence[str]) -> list[str]:
         argv += ["--batch", opts.batch]
 
     base = list(verb.base)
-
-    # Mode switches. Each verb has one documented default mode; these widen
-    # it in the direction the flag name implies and never narrow it silently.
-    if opts.with_probe and "--local-only" in base:
-        base.remove("--local-only")
-    if opts.local_only and "--local-only" not in base:
-        base.append("--local-only")
-    if opts.with_changelog and "--no-changelog" in base:
-        base.remove("--no-changelog")
-    if opts.param_check and "--param-check" not in base:
-        base.append("--param-check")
-    if opts.fees_only:
-        base.append("--fees-only")
-    if opts.dry_run and "--dry-run" not in base:
-        base.append("--dry-run")
-    if opts.replace_versions:
-        base.append("--replace-versions")
-    if opts.with_versions and "--update-versions" not in base:
-        base.append("--update-versions")
+    _apply_mode_switches(opts, base)
     if opts.versions_from:
         argv += ["--versions-from", opts.versions_from]
 
     if verb.name == "scaffold":
-        if not opts.repo_url:
-            raise DashboardError("the scaffold verb requires --repo-url <url>")
-        argv += ["--repo-url", opts.repo_url]
-        for flag, value in (
-            ("--scaffold-ticker", opts.scaffold_ticker),
-            ("--scaffold-tag", opts.scaffold_tag),
-            ("--scaffold-name", opts.scaffold_name),
-            ("--scaffold-out-dir", opts.scaffold_out_dir),
-        ):
-            if value:
-                argv += [flag, value]
-        if opts.apply:
-            base.append("--apply")
+        _scaffold_argv(opts, argv, base)
 
     argv += base
     argv += list(raw)
@@ -404,18 +420,30 @@ def build_envelope(inp: EnvelopeInputs) -> dict[str, Any]:
     return envelope
 
 
-def decide_exit(verb: Verb, opts: argparse.Namespace, payload: Sequence[Any]) -> int:
+def decide_exit(
+    verb: Verb,
+    opts: argparse.Namespace,
+    payload: Sequence[Any],
+    audit_exit: int | None = None,
+) -> int:
     """0 = nothing left to decide, 1 = something is. Errors are handled above.
 
     A write verb that really wrote returns 0: the work is done, so there is
     no pending decision. A write verb run with ``--dry-run``, and scaffold
     without ``--apply``, are previews and follow the data-verb rule instead.
+
+    A live write that planned nothing is only "nothing to do" when the engine
+    exited clean. A non-zero ``audit_exit`` with an empty plan means it refused
+    before deriving a single entry (a scaffold whose fee source is unresolvable,
+    say), so no coin landed — still a decision, never the success code.
     """
     if verb.informational:
         return 0
     if verb.write and not opts.dry_run and (verb.name != "scaffold" or opts.apply):
         rows = [p for p in payload if isinstance(p, dict)]
         if any(not p.get("applied") for p in rows):
+            return 1
+        if not rows and audit_exit:
             return 1
         return 0
     return 1 if payload else 0
@@ -496,28 +524,6 @@ def _param_rollup(report: dict[str, Any]) -> dict[str, Any]:
     return rollup
 
 
-def _raw_tickers(raw: Sequence[str]) -> str | None:
-    """A `--ticker` smuggled past `--` still scopes the run: fold it into
-    the slot decision. Argv itself passes through verbatim — only the
-    cache-slot choice reads it, so the fleet slot never holds scoped
-    content however the scope arrived.
-    """
-    tickers: str | None = None
-    args = list(raw)
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg == "--ticker" and i + 1 < len(args):
-            tickers = args[i + 1]
-            i += 2
-        elif arg.startswith("--ticker="):
-            tickers = arg.split("=", 1)[1]
-            i += 1
-        else:
-            i += 1
-    return tickers
-
-
 def _run_verb(opts: argparse.Namespace, raw: Sequence[str]) -> tuple[dict[str, Any], int]:
     verb = VERBS[opts.verb]
     if verb.name == "scaffold" and getattr(opts, "tickers", None):
@@ -530,7 +536,7 @@ def _run_verb(opts: argparse.Namespace, raw: Sequence[str]) -> tuple[dict[str, A
     primary, last, log_path = report_paths(
         verb.name,
         opts.report,
-        tickers=getattr(opts, "tickers", None) or _raw_tickers(raw),
+        tickers=getattr(opts, "tickers", None) or argv_tickers(raw),
     )
 
     cmd = runner.audit_command(argv, primary)
@@ -571,7 +577,7 @@ def _run_verb(opts: argparse.Namespace, raw: Sequence[str]) -> tuple[dict[str, A
         extra["scaffold"] = report.get("scaffold")
 
     payload = plan if verb.subject == "plan" else findings
-    code = decide_exit(verb, opts, payload)
+    code = decide_exit(verb, opts, payload, result["returncode"])
     envelope = build_envelope(
         EnvelopeInputs(
             verb=verb,

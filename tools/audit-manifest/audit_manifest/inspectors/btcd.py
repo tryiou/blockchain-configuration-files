@@ -15,6 +15,7 @@ from ..checkout import SourceReader
 from ..model import FeePolicy, ManifestCoin, ParamStatus, max_status
 from ..probe import SystemCommandRunner
 from ..util import conf_val_ci
+from .base import line_of
 
 # Satoshis per coin, the Go-coin COIN the xbridge conf must carry.
 _SATOSHIS_PER_COIN = 100000000
@@ -32,7 +33,7 @@ class BtcdSourceInspector:
             m = re.search(r"DefaultMinRelayTxFee\s*=\s*.*Amount\s*\(\s*(\d+)\s*\)", txt)
             if m:
                 try:
-                    return int(m.group(1)), f"{rel}:{txt[: m.start()].count(chr(10)) + 1}", None, None
+                    return int(m.group(1)), f"{rel}:{line_of(txt, m)}", None, None
                 except ValueError:
                     pass
         return None, None, None, None
@@ -76,14 +77,13 @@ class BtcdSourceInspector:
             return ParamStatus.UNRESOLVED, "wallet conf has no port= line"
         if got == want:
             return ParamStatus.MATCH, (
-                f"wallet port={got} == source DefaultPort={want} "
-                f"(chaincfg/params.go:{txt[: m.start()].count(chr(10)) + 1})"
+                f"wallet port={got} == source DefaultPort={want} (chaincfg/params.go:{line_of(txt, m)})"
             )
         since = SourceReader.lineage_date(repo_root, f"wallet-confs/{coin.wallet_conf}", "port")
         lin = f"; value present since {since}" if since else ""
         return ParamStatus.WARN, (
             f"wallet port={got} vs source DefaultPort={want} "
-            f"(chaincfg/params.go:{txt[: m.start()].count(chr(10)) + 1}){lin} [fleet-reassigned]"
+            f"(chaincfg/params.go:{line_of(txt, m)}){lin} [fleet-reassigned]"
         )
 
     @staticmethod
@@ -98,7 +98,7 @@ class BtcdSourceInspector:
             m = re.search(r"RPCListeners.*default port:\s*(\d+)", txt)
             if m:
                 want = int(m.group(1))
-                want_ev = f"config.go:{txt[: m.start()].count(chr(10)) + 1}"
+                want_ev = f"config.go:{line_of(txt, m)}"
                 try:
                     got = int(wc.get("rpcport", ""))
                 except ValueError:
@@ -142,7 +142,7 @@ class BtcdSourceInspector:
                 raw = mm.group(1)
                 try:
                     val = int(raw, 16) if raw.lower().startswith("0x") else int(raw)
-                    wants[key] = (val, txt[:start].count("\n") + block[: mm.start()].count("\n") + 1)
+                    wants[key] = (val, txt[:start].count("\n") + line_of(block, mm))
                 except ValueError:
                     continue
 
@@ -199,7 +199,7 @@ class BtcdSourceInspector:
         except ValueError:
             return ParamStatus.UNRESOLVED, f"TargetTimePerBlock unparsable: {m.group(1)!r}"
 
-        ln = txt[: m.start()].count("\n") + 1
+        ln = line_of(txt, m)
         if want == bt:
             return ParamStatus.PASS, f"BlockTime={bt} == TargetTimePerBlock {want}s (chaincfg/params.go:{ln})"
         since = SourceReader.lineage_date(repo_root, f"xbridge-confs/{coin.xbridge_conf}", "BlockTime")
@@ -222,7 +222,7 @@ class BtcdSourceInspector:
                     except ValueError:
                         continue
                     rel = str(cand.relative_to(src_dir))
-                    ln = txt[: m.start()].count("\n") + 1
+                    ln = line_of(txt, m)
                     return src_n, f"{rel}:{ln}"
         except OSError:
             pass
@@ -304,13 +304,13 @@ class BtcdSourceInspector:
                 m = re.search(r"\b100000000\b", comp)
             if m:
                 has_one_btc = True
-                comp_ev = f"blockchain/compress.go:{comp[: m.start()].count(chr(10)) + 1}"
+                comp_ev = f"blockchain/compress.go:{line_of(comp, m)}"
         gen = SourceReader.slurp(src_dir / "chaincfg/genesis.go")
         gen_ln = None
         if gen is not None:
             m_gen = re.search(r"0x8e1bc9bf040000", gen.lower())
             if m_gen:
-                gen_ln = gen[: m_gen.start()].count("\n") + 1
+                gen_ln = line_of(gen, m_gen)
         # Genesis premine arithmetic is LBC-specific evidence — it must not
         # certify a non-LBC btcd coin on its own.
         has_gen = gen_ln is not None and coin.ticker == "LBC"
@@ -397,7 +397,7 @@ class BtcdSourceInspector:
         if m is None:
             return ParamStatus.UNRESOLVED, "TxVersion not found in wire/msgtx.go"
         bound = int(m.group(1))
-        ln = txt[: m.start()].count("\n") + 1
+        ln = line_of(txt, m)
         try:
             tv = int(xc.get("TxVersion", ""))
         except ValueError:
@@ -413,7 +413,7 @@ class BtcdSourceInspector:
             return ParamStatus.UNRESOLVED, "btcd layout: wire/msgtx.go not found"
         m = re.search(r"type\s+MsgTx\s+struct\s*\{(.*?)\}", txt, flags=re.S)
         block = m.group(1) if m else ""
-        struct_ln = txt[: m.start()].count("\n") + 1 if m else 1
+        struct_ln = line_of(txt, m) if m else 1
         has_ntime = bool(re.search(r"\bnTime\b", block))
         raw = xc.get("TxWithTimeField", "").strip().lower()
         conf_v = raw in ("1", "true", "yes")
@@ -445,7 +445,7 @@ class BtcdSourceInspector:
         if m is None:
             return ParamStatus.UNRESOLVED, "defaultTxIndex not found in config.go"
         dflt = m.group(1) == "true"
-        ev = f"config.go:{txt[: m.start()].count(chr(10)) + 1}"
+        ev = f"config.go:{line_of(txt, m)}"
         has_line = "txindex" in {k.split(".")[0].lower() for k in wc}
         if not has_line and dflt is False:
             return ParamStatus.WARN, f"txindex missing from conf while defaultTxIndex=false ({ev})"

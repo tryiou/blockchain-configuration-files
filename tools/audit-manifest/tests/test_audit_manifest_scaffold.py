@@ -116,7 +116,15 @@ def test_scaffold_plan_entries_carry_staged_contents():
 
     snippet = {"ticker": "NEW", "ver_id": "new--v1.0", "versions": ["v1.0.0"]}
     entries = scaffold_plan_entries(
-        "NEW", "new--v1.0", "v1.0.0", "new--v1.0.conf", "new--v1.0.conf", "rpcuser=x\n", "Port=1\n", snippet
+        "NEW",
+        "new--v1.0",
+        "v1.0.0",
+        "new--v1.0.conf",
+        "new--v1.0.conf",
+        "rpcuser=x\n",
+        "Port=1\n",
+        snippet,
+        "manifest-latest.json",
     )
     assert [e["file"] for e in entries] == [
         "wallet-confs/new--v1.0.conf",
@@ -195,7 +203,15 @@ def test_scaffold_applier_refuses_duplicates_and_collisions(tmp_path):
         "xbridge_conf": "aaa.conf",
     }
     dup = scaffold_plan_entries(
-        "AAA", "a--v1.0", "v1.0.0", "aaa.conf", "aaa.conf", "port=6000\n", "Port=6000\n", dup_snippet
+        "AAA",
+        "a--v1.0",
+        "v1.0.0",
+        "aaa.conf",
+        "aaa.conf",
+        "port=6000\n",
+        "Port=6000\n",
+        dup_snippet,
+        "manifest-latest.json",
     )
     assert all(e["applied"] is False for e in apply_entries(dup, tmp_path))
     clash_snippet = {
@@ -214,6 +230,7 @@ def test_scaffold_applier_refuses_duplicates_and_collisions(tmp_path):
         "port=5000\nrpcport=5001\n",
         "Port=5001\n",
         clash_snippet,
+        "manifest-latest.json",
     )
     out = apply_entries(clash, tmp_path)
     assert all(e["applied"] is False for e in out)
@@ -244,6 +261,7 @@ def test_scaffold_apply_routes_through_single_applier(tmp_path):
         "rpcuser=x\nport=6000\nrpcport=6001\n",
         "Port=6001\n",
         snippet,
+        "manifest-latest.json",
     )
     out = apply_entries(entries, tmp_path)
     assert all(e["applied"] for e in out)

@@ -772,7 +772,10 @@ class DashboardApp(App):
                 handle_write,
             )
             return
-        if narrowed:
+        if narrowed and selection:
+            # narrowed is only ever set for a non-None selection (see
+            # _settle_scope), and the guard states it for readers and the
+            # type checker alike.
 
             def handle(confirmed: bool | None) -> None:  # noqa: FBT001  # modal result payload, invoked positionally by push_screen
                 if confirmed:
@@ -1060,8 +1063,8 @@ class DashboardApp(App):
         plan = self.workspace.plan
         selection = self.state.get("selection")
         fleet = {e["ticker"] for e in _tickable(fleet_entries())}
-        scoped = scoped_subset_for_apply(plan, selection, fleet)
-        if not scoped:
+        subset = scoped_subset_for_apply(plan, selection, fleet)
+        if not subset:
             # A scope with no planned writes confirms nothing: refuse
             # like the no-plan path instead of dialoguing a no-op.
             self.query_one("#tabs", TabbedContent).active = "tab-plan"
@@ -1069,9 +1072,9 @@ class DashboardApp(App):
                 "Nothing to apply under this scope: widen the scope or run Plan."
             )
             return
-        files = apply_files(scoped)
+        files = apply_files(subset)
         body = (
-            f"{len(scoped)} write(s) to {len(files)} file(s) in the working "
+            f"{len(subset)} write(s) to {len(files)} file(s) in the working "
             "tree:\n\n  " + "\n  ".join(files[:12]) + ("\n  …" if len(files) > _MAX_FILE_PREVIEW else "")
         )
         scope = self._scope_line()

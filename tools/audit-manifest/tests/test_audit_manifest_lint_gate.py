@@ -26,6 +26,17 @@ _SKIP_WITHOUT_RUFF = pytest.mark.skipif(
     importlib.util.find_spec("ruff") is None, reason="ruff not installed in this environment"
 )
 
+_SKIP_WITHOUT_MYPY = pytest.mark.skipif(
+    importlib.util.find_spec("mypy") is None, reason="mypy not installed in this environment"
+)
+
+# The dashboard's Textual screens declare attributes the framework sets
+# after construction (App.state, widget .value, action_* handlers), which
+# mypy cannot see from the annotations alone. Those findings are the
+# documented baseline: the engine types clean, and any dashboard finding
+# OUTSIDE this set fails the gate. Shrinking the baseline is deliberate.
+_TEXTUAL_DYNAMICS_BASELINE = {"dashboard/screens.py": 13}
+
 # One decision point more than the budget ruff.toml declares, so the shipped
 # config must flag it by rule code, not by anything about the function body.
 _COMPLEXITY_PROBE = """\
@@ -101,3 +112,46 @@ def test_source_is_ruff_format_clean():
         cwd=str(REPO_ROOT),
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def _mypy(*targets: str) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(
+        [sys.executable, "-m", "mypy", *targets],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=str(TOOL_DIR),
+    )
+
+
+@_SKIP_WITHOUT_MYPY
+def test_engine_type_checks_clean():
+    """audit_manifest/ must pass mypy with zero findings.
+
+    The engine carries the fund-loss math and every conf/manifest write, so
+    its annotations are load-bearing: a wrong return type, a mis-typed call
+    or an unguarded Optional must be visible here, not only in review.
+    """
+    proc = _mypy("audit_manifest")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+@_SKIP_WITHOUT_MYPY
+def test_dashboard_stays_at_the_documented_mypy_baseline():
+    """Dashboard findings may only be the Textual-dynamics class, counted.
+
+    A new finding moves the per-file counts and fails here, so the
+    baseline shrinks only by deliberate edit — never by a regression
+    quietly replacing a known one.
+    """
+    proc = _mypy("dashboard")
+    counts: dict[str, int] = {}
+    for line in proc.stdout.splitlines():
+        if ": error:" in line:
+            path = line.split(":", 1)[0]
+            counts[path] = counts.get(path, 0) + 1
+    assert counts == _TEXTUAL_DYNAMICS_BASELINE, (
+        "dashboard mypy findings drifted from the documented Textual-dynamics baseline "
+        f"{_TEXTUAL_DYNAMICS_BASELINE} (got {counts}); fix the new findings or update the "
+        "baseline deliberately\n" + proc.stdout
+    )

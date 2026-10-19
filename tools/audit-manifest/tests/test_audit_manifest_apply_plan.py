@@ -206,6 +206,183 @@ def test_versions_collapse_carries_machine_target(tmp_path):
     assert (tmp_path / "wallet-confs" / "aaa--v1.1.0.conf").is_file()
 
 
+def test_versions_collapse_removes_the_superseded_confs(tmp_path):
+    """--replace-versions renames: the retired confs must not survive as orphans.
+
+    The manifest is rewritten to the new conf names, so leaving the old confs
+    behind orphans them on every collapse. The plan must carry each removal and
+    the applier must drop the file once the manifest no longer names it.
+    """
+    import argparse
+
+    from audit_manifest.fixes import plan_version_bumps
+
+    manifest = [
+        {
+            "ticker": "AAA",
+            "ver_id": "aaa--v1.0",
+            "versions": ["v1.0.0"],
+            "wallet_conf": "aaa--v1.0.conf",
+            "xbridge_conf": "aaa--v1.0.conf",
+        }
+    ]
+    (tmp_path / "manifest-latest.json").write_text(json.dumps(manifest))
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "xbridge-confs").mkdir()
+    (tmp_path / "wallet-confs" / "aaa--v1.0.conf").write_text("x=1\n")
+    (tmp_path / "xbridge-confs" / "aaa--v1.0.conf").write_text("y=2\n")
+    repos = {
+        "https://example.invalid/r": {
+            "status": "ALIVE",
+            "newer_same": ["v1.1.0"],
+            "newer_alt": [],
+            "remote_latest": "v1.1.0",
+            "entries": [{"ticker": "AAA"}],
+        }
+    }
+    args = argparse.Namespace(update_versions=True, replace_versions=True, dry_run=True)
+    _tickers, plan = plan_version_bumps(args, tmp_path / "manifest-latest.json", repos, tmp_path)
+    removals = [e for e in plan if e["action"] == "versions" and e["key"] == "-"]
+    assert len(removals) == 2, plan
+    assert {e["file"] for e in removals} == {"wallet-confs/aaa--v1.0.conf", "xbridge-confs/aaa--v1.0.conf"}
+    out = apply_entries(plan, tmp_path)
+    assert all(e["applied"] for e in out), [e for e in out if not e["applied"]]
+    assert (tmp_path / "wallet-confs" / "aaa--v1.1.0.conf").is_file()
+    assert (tmp_path / "xbridge-confs" / "aaa--v1.1.0.conf").is_file()
+    assert not (tmp_path / "wallet-confs" / "aaa--v1.0.conf").exists()
+    assert not (tmp_path / "xbridge-confs" / "aaa--v1.0.conf").exists()
+
+
+def test_superseded_removal_refuses_while_the_manifest_still_names_it(tmp_path):
+    """A refused or skipped collapse must never orphan-delete a live conf.
+
+    Removal is only safe once the manifest points elsewhere; while it still
+    names the file the entry must refuse and leave the file in place.
+    """
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "wallet-confs" / "aaa--v1.0.conf").write_text("x=1\n")
+    (tmp_path / "manifest-latest.json").write_text(
+        json.dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa--v1.0.conf",
+                    "xbridge_conf": "aaa--v1.0.conf",
+                }
+            ]
+        )
+    )
+    entry = {
+        "action": "versions",
+        "file": "wallet-confs/aaa--v1.0.conf",
+        "key": "-",
+        "old": "aaa--v1.0.conf",
+        "new": None,
+        "reason": "t",
+        "coin": "AAA",
+        "ver_id": "aaa--v1.0",
+        "applied": False,
+    }
+    out = apply_entries([entry], tmp_path)
+    assert out[0]["applied"] is False
+    assert "still points at" in out[0]["error"]
+    assert (tmp_path / "wallet-confs" / "aaa--v1.0.conf").is_file()
+
+
+def test_superseded_removal_refuses_while_another_ticker_holds_the_conf(tmp_path):
+    """A conf still named by a second manifest row must survive the collapse.
+
+    Conf names embed ticker+version, so two rows sharing one is not expected
+    today — but this applier deletes a file, so the gate must cover the whole
+    fleet, not only the collapsing coin's own row.
+    """
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "wallet-confs" / "aaa--v1.0.conf").write_text("x=1\n")
+    (tmp_path / "manifest-latest.json").write_text(
+        json.dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.1",
+                    "versions": ["v1.1.0"],
+                    "wallet_conf": "aaa--v1.1.conf",
+                    "xbridge_conf": "aaa--v1.1.conf",
+                },
+                {
+                    "ticker": "BBB",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa--v1.0.conf",
+                    "xbridge_conf": "aaa--v1.0.conf",
+                },
+            ]
+        )
+    )
+    entry = {
+        "action": "versions",
+        "file": "wallet-confs/aaa--v1.0.conf",
+        "key": "-",
+        "old": "aaa--v1.0.conf",
+        "new": None,
+        "reason": "t",
+        "coin": "AAA",
+        "ver_id": "aaa--v1.1",
+        "applied": False,
+    }
+    out = apply_entries([entry], tmp_path)
+    assert out[0]["applied"] is False
+    assert "is still named by BBB" in out[0]["error"]
+    assert (tmp_path / "wallet-confs" / "aaa--v1.0.conf").is_file()
+
+
+def test_superseded_removal_refuses_while_a_duplicate_row_names_the_conf(tmp_path):
+    """A second row for the same ticker still blocks the unlink.
+
+    The collapse rewrites only the first row it finds, so a duplicate ticker
+    (hand-edited manifest) can leave the old conf named elsewhere. The holder
+    scan must read every row, not skip rows that share the removal's coin.
+    """
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "wallet-confs" / "aaa--v1.0.conf").write_text("x=1\n")
+    (tmp_path / "manifest-latest.json").write_text(
+        json.dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.1",
+                    "versions": ["v1.1.0"],
+                    "wallet_conf": "aaa--v1.1.conf",
+                    "xbridge_conf": "aaa--v1.1.conf",
+                },
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa--v1.0.conf",
+                    "xbridge_conf": "aaa--v1.0.conf",
+                },
+            ]
+        )
+    )
+    entry = {
+        "action": "versions",
+        "file": "wallet-confs/aaa--v1.0.conf",
+        "key": "-",
+        "old": "aaa--v1.0.conf",
+        "new": None,
+        "reason": "t",
+        "coin": "AAA",
+        "ver_id": "aaa--v1.1",
+        "applied": False,
+    }
+    out = apply_entries([entry], tmp_path)
+    assert out[0]["applied"] is False
+    assert "still named by AAA" in out[0]["error"]
+    assert (tmp_path / "wallet-confs" / "aaa--v1.0.conf").is_file()
+
+
 def test_scaffold_entries_refused_without_staged_contents(tmp_path):
     """P0-B: contentless scaffold entries refuse instead of guessing."""
     entry = {
@@ -699,6 +876,66 @@ def test_delist_dry_run_exits_zero(tmp_path):
     assert (tmp_path / "wallet-confs" / "aaa.conf").is_file()
 
 
+def test_delist_writes_the_named_manifest_and_nothing_else(tmp_path):
+    """--manifest points the whole verb at one file; the sibling default is not touched.
+
+    A candidate fleet file next to the production manifest must receive
+    the splice itself: planning, applying, and the per-entry old-value
+    verification all read the same file the CLI was pointed at.
+    """
+    from audit_manifest import cli
+
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "xbridge-confs").mkdir()
+    (tmp_path / "wallet-confs" / "aaa.conf").write_text("rpcuser=x\n")
+    (tmp_path / "xbridge-confs" / "aaa.conf").write_text("Port=1\n")
+    (tmp_path / "wallet-confs" / "bbb.conf").write_text("rpcuser=y\n")
+    coin = {"ver_id": "aaa--v1.0", "versions": ["v1.0.0"], "wallet_conf": "aaa.conf", "xbridge_conf": "aaa.conf"}
+    candidate = tmp_path / "manifest-candidate.json"
+    candidate.write_text(
+        json.dumps(
+            [
+                {"ticker": "AAA", **coin},
+                {
+                    "ticker": "BBB",
+                    "ver_id": "bbb--v2.0",
+                    "versions": ["v2.0.0"],
+                    "wallet_conf": "bbb.conf",
+                    "xbridge_conf": "bbb.conf",
+                },
+            ]
+        )
+    )
+    # Same AAA ticker in the production file: a splice aimed at the wrong
+    # manifest would still "succeed", silently editing the wrong fleet.
+    (tmp_path / "manifest-latest.json").write_text(
+        json.dumps(
+            [
+                {
+                    "ticker": "AAA",
+                    "ver_id": "aaa--v1.0",
+                    "versions": ["v1.0.0"],
+                    "wallet_conf": "aaa.conf",
+                    "xbridge_conf": "aaa.conf",
+                },
+                {
+                    "ticker": "ZZZ",
+                    "ver_id": "zzz--v9.0",
+                    "versions": ["v9.0.0"],
+                    "wallet_conf": "zzz.conf",
+                    "xbridge_conf": "zzz.conf",
+                },
+            ]
+        )
+    )
+
+    rc = cli.main(["--manifest", str(candidate), "--delist", "--ticker", "AAA"])
+    assert rc == 0
+    assert [e["ticker"] for e in json.loads(candidate.read_text())] == ["BBB"]
+    assert [e["ticker"] for e in json.loads((tmp_path / "manifest-latest.json").read_text())] == ["AAA", "ZZZ"]
+    assert not (tmp_path / "wallet-confs" / "aaa.conf").exists()
+
+
 def test_apply_plan_file_preserves_report_shape(tmp_path):
     """Pointing at a full report keeps its keys, not just the plan."""
     from audit_manifest.apply_plan import apply_plan_file
@@ -838,6 +1075,7 @@ def test_scaffold_refuses_degenerate_port_pair(tmp_path):
         "port=5000\nrpcport=5000\n",
         "Port=5000\n",
         snippet,
+        "manifest-latest.json",
     )
     out = apply_entries(entries, tmp_path)
     assert all(e["applied"] is False for e in out)
@@ -874,6 +1112,7 @@ def test_scaffold_dict_manifest_refuses_everything(tmp_path):
         "port=6000\nrpcport=6001\n",
         "Port=6001\n",
         snippet,
+        "manifest-latest.json",
     )
     out = apply_entries(entries, tmp_path)
     assert all(e["applied"] is False for e in out)
@@ -904,6 +1143,7 @@ def test_partial_scaffold_rolls_back_manifest_row(tmp_path):
         "port=6000\nrpcport=6001\n",
         "Port=6001\n",
         snippet,
+        "manifest-latest.json",
     )
     del entries[0]["contents"]
     out = apply_entries(entries, tmp_path)

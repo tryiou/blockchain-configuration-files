@@ -18,7 +18,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent.parent
 AUDIT_SCRIPT = HERE / "audit-manifest.py"
 REPO_ROOT = HERE.parent.parent
-DEFAULT_MANIFEST = REPO_ROOT / "manifest-latest.json"
+DEFAULT_MANIFEST_NAME = "manifest-latest.json"
+DEFAULT_MANIFEST = REPO_ROOT / DEFAULT_MANIFEST_NAME
 CACHE_ROOT = REPO_ROOT / ".cache" / "audit-manifest"
 LAST_REPORT = CACHE_ROOT / "last-run.json"
 LAST_META = CACHE_ROOT / "last-run.meta.json"
@@ -216,7 +217,7 @@ def fleet_report_slots() -> list[tuple[str, dict[str, Any], float, dict[str, Any
     return slots
 
 
-def fleet_extra_slots() -> dict[str, tuple[dict[str, Any], float]]:
+def fleet_extra_slots() -> dict[str, tuple[dict[str, Any], float, dict[str, Any]]]:
     """Decoded ports/cross-check fleet slots for the overview ledger.
 
     Their signal is a payload blob (collision map, missing/orphan

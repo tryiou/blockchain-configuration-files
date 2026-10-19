@@ -189,6 +189,24 @@ def test_non_repo_findings_carry_the_versions_key_as_null():
         assert f["versions"] is None, f["id"]
 
 
+def test_missing_base_j2_finding_names_the_lowercase_template():
+    """The detail and machine ``file`` must name the template the check used.
+
+    base.j2 files are lowercase; ``TICKER.base.j2`` names no existing file, so
+    a finding that points there is a dead end for both the operator and the
+    TUI's file navigation.
+    """
+    from audit_manifest.findings import build_findings
+
+    local = dict(_EMPTY_LOCAL)
+    local["missing_base_j2"] = ["XXX"]
+    findings = build_findings([_xxx_coin()], {}, local, dict(_EMPTY_PORTS), None)
+    j2 = next(f for f in findings if f["id"] == "MISSING-BASE-J2")
+    assert j2["file"] == "autobuild/configs/xxx.base.j2"
+    assert "xxx.base.j2" in j2["detail"]
+    assert "XXX.base.j2" not in j2["detail"]
+
+
 def test_fee_fixer_never_falls_back_to_ver_id_and_never_skips_silently(caplog):
     """The fixer must not treat ver_id as a tag, and must log any skip.
 

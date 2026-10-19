@@ -22,7 +22,7 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tickers", default=None, help="Comma-separated ticker filter, e.g. BTC,LTC")
     parser.add_argument("--timeout", type=int, default=30, help="Seconds per probe")
     parser.add_argument("--batch", default=None, help="Batch label recorded in report meta")
-    parser.add_argument("--manifest", default=str(paths.DEFAULT_MANIFEST), help="Path to manifest-latest.json")
+    parser.add_argument("--manifest", default=str(paths.DEFAULT_MANIFEST), help="Path to the fleet manifest JSON")
     parser.add_argument(
         "--report",
         default=None,

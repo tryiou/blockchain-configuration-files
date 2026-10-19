@@ -256,7 +256,9 @@ def _repo_lines(entries: list[dict[str, Any]], facts: _RepoTagFacts) -> dict[str
 
 def _newest_line(facts: _RepoTagFacts, remote_latest: str | None) -> str:
     """The upstream_date_newest fragment, noting when newest == semver max."""
-    if not facts.newest_tag:
+    if not facts.newest_tag or not facts.newest_date:
+        # A newest tag with no parseable date renders no date fragment
+        # rather than slicing None.
         return ""
     if facts.newest_tag == remote_latest:
         return f"  upstream_date_newest={facts.newest_tag} (=upstream_semver_max) ({facts.newest_date[:10]})"
@@ -521,6 +523,15 @@ def audit_repos(
     return report_repos, summary, action_summary
 
 
+def _param_total(param_results: dict[str, Any], field: str) -> int:
+    """Sum one count field across the per-coin rows; meta keys excluded.
+
+    The ``_``-prefixed rows are collision metadata, not coin rows, so
+    every summary total folds the same way.
+    """
+    return sum(v.get(field, 0) for k, v in param_results.items() if not k.startswith("_") and isinstance(v, dict))
+
+
 def _inject_collision_checks(
     res: ParamAuditResult,
     coin: ManifestCoin,
@@ -702,18 +713,10 @@ def audit_params(  # noqa: PLR0913, PLR0917  # one input per audit stage
             total_fail += res.fail
             time.sleep(args.sleep * 0.2)
 
-        total_differs = sum(
-            v.get("differs", 0) for k, v in param_results.items() if not k.startswith("_") and isinstance(v, dict)
-        )
-        total_warn = sum(
-            v.get("warn", 0) for k, v in param_results.items() if not k.startswith("_") and isinstance(v, dict)
-        )
-        total_unresolved = sum(
-            v.get("unresolved", 0) for k, v in param_results.items() if not k.startswith("_") and isinstance(v, dict)
-        )
-        total_conflicts = sum(
-            v.get("conflict", 0) for k, v in param_results.items() if not k.startswith("_") and isinstance(v, dict)
-        )
+        total_differs = _param_total(param_results, "differs")
+        total_warn = _param_total(param_results, "warn")
+        total_unresolved = _param_total(param_results, "unresolved")
+        total_conflicts = _param_total(param_results, "conflict")
         pv_fail = sum(
             pv.get("fail", 0)
             for k, v in param_results.items()

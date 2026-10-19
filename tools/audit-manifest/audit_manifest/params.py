@@ -7,8 +7,9 @@ helpers are the single place that routes to the right inspector.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, NamedTuple
 
 from .checkout import SourceCheckoutManager, SourceReader
 from .constants import logger
@@ -45,14 +46,91 @@ def fee_policy_for_coin(coin: ManifestCoin, src_dir: Path) -> FeePolicy:
     return CppSourceInspector.fee_policy(src_dir)
 
 
+class _CheckCtx(NamedTuple):
+    """Everything the checker tables read beyond their per-check arguments."""
+
+    shard: ManifestCoin
+    src_dir: Path
+    wc: dict[str, str]
+    xc: dict[str, str]
+    repo_root: Path
+    want_test: bool
+    rate: int | None
+    rate_ev: str | None
+    dust: int | None
+    dust_ev: str | None
+    policy: FeePolicy
+
+
+def _run_checker(  # noqa: PLR0913, PLR0917  # dispatch signature: one slot per ingredient of a checker call
+    cid: str,
+    func: Callable[..., Any],
+    coin: ManifestCoin,
+    version_tag: str,
+    checks: list[CheckFinding],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> None:
+    """Run one checker and append its finding, degrading a crash to a row.
+
+    Checker contract: ``(status, detail)`` or ``(status, detail, fixable
+    kind)``. A checker that raises never aborts the version — it becomes
+    a FAIL/WARN row naming the exception, so a broken checker is visible
+    in the report instead of silently dropping a check.
+    """
+    fixable: str | None = None
+    try:
+        st, det, fixable = CheckResult(*func(*args, **kwargs))
+    except Exception as exc:
+        logger.exception("Checker %s failed for %s @ %s", cid, coin.ticker, version_tag)
+        msg = str(exc).lower()
+        st = ParamStatus.FAIL if ("not found" in msg or "no such file" in msg) else ParamStatus.WARN
+        det = f"checker error: {exc}"
+    checks.append(CheckFinding(id=cid, status=st, detail=det, fixable=fixable))
+
+
 class ParamAuditEngine:
     """Executes rule-based parameter validation passes against verified source trees."""
 
     def __init__(self, checkout_manager: SourceCheckoutManager):
         self.checkout_manager = checkout_manager
 
-    # dispatch orchestrator: the full checker set reads in one place
-    def audit_version(  # noqa: PLR0913, PLR0915, PLR0917
+    def _resolve_version_source(self, shard: ManifestCoin, version_tag: str, timeout: int) -> tuple[Path | None, str]:
+        """The checkout for one shard, degrading a bad ticker to no-source.
+
+        Returns ``(src_dir, mode)``; ``src_dir is None`` carries the mode
+        that explains why, so the caller can emit the structured row.
+        """
+        try:
+            return self.checkout_manager.resolve_source(shard, version_tag, timeout)
+        except ValueError as exc:
+            # Malformed manifest ticker: degrade this one entry to a
+            # structured no-source row instead of aborting the whole run.
+            logger.error("PARAM-CHECK %s @ %s: %s", shard.ticker or "?", version_tag, exc)
+            return None, "no-valid-ticker"
+
+    @staticmethod
+    def _conf_views(
+        repo_root: Path, wallet_conf: str, xbridge_conf: str
+    ) -> tuple[dict[str, str], dict[str, str], bool]:
+        """(wallet conf flat dict, xbridge conf dict, want_test flag).
+
+        A testnet-section wallet conf folds its ``[test]`` keys over the
+        top level and flags itself, so every checker reads one dict.
+        """
+        wsecs = SourceReader.parse_conf_sections(repo_root / "wallet-confs" / wallet_conf)
+        top = wsecs.get("", {})
+        test = wsecs.get("test", {})
+        want_test = bool(test) or top.get("testnet", "").strip() == "1"
+        wc = dict(top)
+        if want_test:
+            wc.update(test)
+            wc["_has_test_section"] = "true"
+        xc = SourceReader.parse_conf(repo_root / "xbridge-confs" / xbridge_conf)
+        return wc, xc, want_test
+
+    # dispatch orchestrator: resolve, parse, then the family's checker table
+    def audit_version(  # noqa: PLR0913, PLR0917  # result-row inputs, keyword-only at the call site
         self,
         coin: ManifestCoin,
         repo_root: Path,
@@ -63,15 +141,8 @@ class ParamAuditEngine:
         *,
         fees_only: bool = False,
     ) -> ParamAuditResult:
-        shard = ParamAuditEngine._shard_for_version(coin, version_tag, wallet_conf, xbridge_conf)
-
-        try:
-            src_dir, mode = self.checkout_manager.resolve_source(shard, version_tag, timeout)
-        except ValueError as exc:
-            # Malformed manifest ticker: degrade this one entry to a
-            # structured no-source row instead of aborting the whole run.
-            logger.error("PARAM-CHECK %s @ %s: %s", coin.ticker or "?", version_tag, exc)
-            src_dir, mode = None, "no-valid-ticker"
+        shard = self._shard_for_version(coin, version_tag, wallet_conf, xbridge_conf)
+        src_dir, mode = self._resolve_version_source(shard, version_tag, timeout)
         if src_dir is None:
             return ParamAuditResult(
                 tag=version_tag,
@@ -82,104 +153,30 @@ class ParamAuditEngine:
                 xbridge_conf=xbridge_conf,
             )
 
-        wsecs = SourceReader.parse_conf_sections(repo_root / "wallet-confs" / wallet_conf)
-        top = wsecs.get("", {})
-        test = wsecs.get("test", {})
-        want_test = bool(test) or top.get("testnet", "").strip() == "1"
-        wc = dict(top)
-        if want_test:
-            wc.update(test)
-            wc["_has_test_section"] = "true"
-
-        xc = SourceReader.parse_conf(repo_root / "xbridge-confs" / xbridge_conf)
-        is_btcd = shard.is_btcd
-
-        if is_btcd:
+        wc, xc, want_test = self._conf_views(repo_root, wallet_conf, xbridge_conf)
+        if shard.is_btcd:
             rate, rate_ev, dust, dust_ev = BtcdSourceInspector.fee_constants(src_dir)
         else:
             rate, rate_ev, dust, dust_ev = CppSourceInspector.fee_constants(src_dir)
         policy = fee_policy_for_coin(shard, src_dir)
+        ctx = _CheckCtx(
+            shard=shard,
+            src_dir=src_dir,
+            wc=wc,
+            xc=xc,
+            repo_root=repo_root,
+            want_test=want_test,
+            rate=rate,
+            rate_ev=rate_ev,
+            dust=dust,
+            dust_ev=dust_ev,
+            policy=policy,
+        )
 
-        checks: list[CheckFinding] = []
-
-        def add_check(cid: str, func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-            fixable: str | None = None
-            try:
-                # checker contract: (status, detail) or (status, detail, fixable kind)
-                st, det, fixable = CheckResult(*func(*args, **kwargs))
-            except Exception as exc:
-                logger.exception("Checker %s failed for %s @ %s", cid, coin.ticker, version_tag)
-                msg = str(exc).lower()
-                st = ParamStatus.FAIL if ("not found" in msg or "no such file" in msg) else ParamStatus.WARN
-                det = f"checker error: {exc}"
-            checks.append(CheckFinding(id=cid, status=st, detail=det, fixable=fixable))
-
-        if is_btcd:
-            add_check("PORT", BtcdSourceInspector.check_port, shard, src_dir, wc, repo_root)
-            add_check("RPCPORT-SOURCE", BtcdSourceInspector.check_rpcport, shard, src_dir, wc, repo_root)
-            add_check("RPCPORT-XBRIDGE", CommonParamCheckers.check_rpcport_xbridge, shard, wc, xc, repo_root)
-            add_check("PREFIXES", BtcdSourceInspector.check_prefixes, shard, src_dir, xc, repo_root)
-            add_check("COIN", BtcdSourceInspector.check_coin, shard, src_dir, xc)
-            add_check("TXVERSION", BtcdSourceInspector.check_txversion, shard, src_dir, xc)
-            add_check("BLOCKTIME", BtcdSourceInspector.check_blocktime, shard, src_dir, xc, repo_root)
-            add_check("FEES", CommonParamCheckers.check_fees, shard, src_dir, xc, rate, rate_ev, dust, dust_ev, policy)
-            add_check("DUST", CommonParamCheckers.check_dust, shard, src_dir, xc, rate, rate_ev, dust, dust_ev, policy)
-            add_check("DEPRECATEDRPC", BtcdSourceInspector.check_deprecatedrpc, shard, src_dir, wc)
-            add_check("TXTIME", BtcdSourceInspector.check_txtime, shard, src_dir, xc)
-            add_check("TXINDEX", BtcdSourceInspector.check_txindex, shard, src_dir, wc)
-            add_check("ADDRTYPE", BtcdSourceInspector.check_addrtype, shard, src_dir, wc)
-            add_check("CONFIRM", CommonParamCheckers.check_confirmations, shard, xc)
-            add_check("METHOD", CommonParamCheckers.check_method, shard, xc)
-            add_check("STRUCT", BtcdSourceInspector.check_structure, shard, wc, xc)
+        if shard.is_btcd:
+            checks = self._checks_btcd(coin, version_tag, ctx)
         else:
-            add_check(
-                "PORT",
-                CppSourceInspector.check_port,
-                shard,
-                src_dir,
-                wc,
-                want_test=want_test,
-                repo_root=repo_root,
-            )
-            add_check(
-                "RPCPORT-SOURCE",
-                CppSourceInspector.check_rpcport_source,
-                shard,
-                src_dir,
-                wc,
-                want_test=want_test,
-                repo_root=repo_root,
-            )
-            add_check("RPCPORT-XBRIDGE", CommonParamCheckers.check_rpcport_xbridge, shard, wc, xc, repo_root)
-            add_check(
-                "PREFIXES",
-                CppSourceInspector.check_prefixes,
-                shard,
-                src_dir,
-                xc,
-                want_test=want_test,
-                repo_root=repo_root,
-            )
-            add_check("COIN", CppSourceInspector.check_coin, shard, src_dir, xc)
-            add_check("TXVERSION", CppSourceInspector.check_txversion, shard, src_dir, xc)
-            add_check(
-                "BLOCKTIME",
-                CppSourceInspector.check_blocktime,
-                shard,
-                src_dir,
-                xc,
-                want_test=want_test,
-                repo_root=repo_root,
-            )
-            add_check("FEES", CommonParamCheckers.check_fees, shard, src_dir, xc, rate, rate_ev, dust, dust_ev, policy)
-            add_check("DUST", CommonParamCheckers.check_dust, shard, src_dir, xc, rate, rate_ev, dust, dust_ev, policy)
-            add_check("DEPRECATEDRPC", CppSourceInspector.check_deprecatedrpc, shard, src_dir, wc, repo_root)
-            add_check("TXTIME", CppSourceInspector.check_txtime, shard, src_dir, xc)
-            add_check("TXINDEX", CppSourceInspector.check_txindex, shard, src_dir, wc)
-            add_check("ADDRTYPE", CppSourceInspector.check_addrtype, shard, src_dir, wc)
-            add_check("CONFIRM", CommonParamCheckers.check_confirmations, shard, xc)
-            add_check("METHOD", CommonParamCheckers.check_method, shard, xc)
-            add_check("STRUCT", CommonParamCheckers.check_structure, shard, wc, xc)
+            checks = self._checks_cpp(coin, version_tag, ctx)
 
         if fees_only:
             checks = [c for c in checks if c.id in ("FEES", "DUST")]
@@ -192,6 +189,83 @@ class ParamAuditEngine:
             wallet_conf=wallet_conf,
             xbridge_conf=xbridge_conf,
         )
+
+    def _checks_btcd(self, coin: ManifestCoin, version_tag: str, ctx: _CheckCtx) -> list[CheckFinding]:
+        """The Go-family checker table, in the order the report lists it."""
+        btcd, common = BtcdSourceInspector, CommonParamCheckers
+        s, w, x, r = ctx.shard, ctx.wc, ctx.xc, ctx.repo_root
+        t = (s, ctx.src_dir)
+        lines: tuple[tuple[str, Any, tuple[Any, ...], dict[str, Any]], ...] = (
+            ("PORT", btcd.check_port, (*t, w, r), {}),
+            ("RPCPORT-SOURCE", btcd.check_rpcport, (*t, w, r), {}),
+            ("RPCPORT-XBRIDGE", common.check_rpcport_xbridge, (s, w, x, r), {}),
+            ("PREFIXES", btcd.check_prefixes, (s, ctx.src_dir, x, r), {}),
+            ("COIN", btcd.check_coin, (*t, x), {}),
+            ("TXVERSION", btcd.check_txversion, (*t, x), {}),
+            ("BLOCKTIME", btcd.check_blocktime, (s, ctx.src_dir, x, r), {}),
+            (
+                "FEES",
+                common.check_fees,
+                (s, ctx.src_dir, x, ctx.rate, ctx.rate_ev, ctx.dust, ctx.dust_ev, ctx.policy),
+                {},
+            ),
+            (
+                "DUST",
+                common.check_dust,
+                (s, ctx.src_dir, x, ctx.rate, ctx.rate_ev, ctx.dust, ctx.dust_ev, ctx.policy),
+                {},
+            ),
+            ("DEPRECATEDRPC", btcd.check_deprecatedrpc, (*t, w), {}),
+            ("TXTIME", btcd.check_txtime, (*t, x), {}),
+            ("TXINDEX", btcd.check_txindex, (*t, w), {}),
+            ("ADDRTYPE", btcd.check_addrtype, (*t, w), {}),
+            ("CONFIRM", common.check_confirmations, (s, x), {}),
+            ("METHOD", common.check_method, (s, x), {}),
+            ("STRUCT", btcd.check_structure, (s, w, x), {}),
+        )
+        out: list[CheckFinding] = []
+        for cid, func, args, kwargs in lines:
+            _run_checker(cid, func, coin, version_tag, out, args, kwargs)
+        return out
+
+    def _checks_cpp(self, coin: ManifestCoin, version_tag: str, ctx: _CheckCtx) -> list[CheckFinding]:
+        """The C++-family checker table, in the order the report lists it."""
+        cpp, common = CppSourceInspector, CommonParamCheckers
+        s, w, x, r = ctx.shard, ctx.wc, ctx.xc, ctx.repo_root
+        t = (s, ctx.src_dir)
+        want = {"want_test": ctx.want_test, "repo_root": r}
+        lines: tuple[tuple[str, Any, tuple[Any, ...], dict[str, Any]], ...] = (
+            ("PORT", cpp.check_port, (*t, w), want),
+            ("RPCPORT-SOURCE", cpp.check_rpcport_source, (*t, w), want),
+            ("RPCPORT-XBRIDGE", common.check_rpcport_xbridge, (s, w, x, r), {}),
+            ("PREFIXES", cpp.check_prefixes, (*t, x), want),
+            ("COIN", cpp.check_coin, (*t, x), {}),
+            ("TXVERSION", cpp.check_txversion, (*t, x), {}),
+            ("BLOCKTIME", cpp.check_blocktime, (*t, x), want),
+            (
+                "FEES",
+                common.check_fees,
+                (s, ctx.src_dir, x, ctx.rate, ctx.rate_ev, ctx.dust, ctx.dust_ev, ctx.policy),
+                {},
+            ),
+            (
+                "DUST",
+                common.check_dust,
+                (s, ctx.src_dir, x, ctx.rate, ctx.rate_ev, ctx.dust, ctx.dust_ev, ctx.policy),
+                {},
+            ),
+            ("DEPRECATEDRPC", cpp.check_deprecatedrpc, (*t, w, r), {}),
+            ("TXTIME", cpp.check_txtime, (*t, x), {}),
+            ("TXINDEX", cpp.check_txindex, (*t, w), {}),
+            ("ADDRTYPE", cpp.check_addrtype, (*t, w), {}),
+            ("CONFIRM", common.check_confirmations, (s, x), {}),
+            ("METHOD", common.check_method, (s, x), {}),
+            ("STRUCT", common.check_structure, (s, w, x), {}),
+        )
+        out: list[CheckFinding] = []
+        for cid, func, args, kwargs in lines:
+            _run_checker(cid, func, coin, version_tag, out, args, kwargs)
+        return out
 
     @staticmethod
     def _shard_for_version(coin: ManifestCoin, version_tag: str, wallet_conf: str, xbridge_conf: str) -> ManifestCoin:

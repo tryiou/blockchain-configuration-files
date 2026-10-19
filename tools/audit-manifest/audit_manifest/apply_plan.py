@@ -21,11 +21,22 @@ from pathlib import Path
 from typing import Any
 
 from .checkout import SourceReader
-from .constants import logger
+from .constants import DEFAULT_MANIFEST_NAME, logger
 from .probe import SystemCommandRunner
 from .reporting import report_line
-from .util import iter_conf_lines, norm_port_value
+from .util import iter_conf_lines, norm_port_value, repo_relative
 from .versioning import build_update_version_names
+
+
+def manifest_target(repo_root: Path, manifest_path: Path | None) -> Path:
+    """The manifest this run writes: the file it was pointed at, or the
+    default name under the repo root.
+
+    Every manifest read and write resolves through here, so a
+    ``--manifest`` override is honored identically by planning, the
+    port-safety gate and the appliers — the same file end to end.
+    """
+    return manifest_path if manifest_path is not None else repo_root / DEFAULT_MANIFEST_NAME
 
 
 def regenerate_base_j2(repo_root: Path, tickers: list[str], runner: SystemCommandRunner | None = None) -> None:
@@ -86,7 +97,7 @@ def _set_or_append(txt: str, key: str, new_val: str, *, section_aware: bool) -> 
     return "\n".join(out) + "\n"
 
 
-def _remove_key(txt: str, key: str) -> tuple:
+def _remove_key(txt: str, key: str) -> tuple[str, list[str]]:
     lines = txt.splitlines()
     out_lines: list[str] = []
     removed_lines: list[str] = []
@@ -137,9 +148,9 @@ def _xbridge_slot(item: dict[str, Any], repo_root: Path) -> tuple[str, str] | No
     return ("xbridge", clean) if clean else None
 
 
-def _fleet_port_holders(repo_root: Path) -> dict[tuple, str] | None:
+def _fleet_port_holders(repo_root: Path, manifest_path: Path | None = None) -> dict[tuple, str] | None:
     """Top-level port assignments per coin: (kind, value) → ticker."""
-    loaded = ManifestStore.read(repo_root / "manifest-latest.json")
+    loaded = ManifestStore.read(manifest_target(repo_root, manifest_path))
     if isinstance(loaded, str):
         return None
     holders: dict[tuple, str] = {}
@@ -170,7 +181,7 @@ def _top_values(txt: str) -> dict[str, str]:
 
 
 def _scaffold_conflicts(  # noqa: C901, PLR0912  # conflict derivation: one branch per conflict kind
-    entries: list[dict[str, Any]], repo_root: Path
+    entries: list[dict[str, Any]], repo_root: Path, manifest_path: Path | None = None
 ) -> dict[str, str]:
     """Staged coins whose ports are taken, by coin."""
     staged: dict[str, dict[str, str]] = {}
@@ -187,7 +198,7 @@ def _scaffold_conflicts(  # noqa: C901, PLR0912  # conflict derivation: one bran
         elif rel.startswith("xbridge-confs/") and vals.get("port"):
             staged.setdefault(str(coin), {})["xbridge"] = vals["port"]
     conflicts: dict[str, str] = {}
-    holders = _fleet_port_holders(repo_root)
+    holders = _fleet_port_holders(repo_root, manifest_path)
     kinds = {"port": "p2p", "rpcport": "rpc", "xbridge": "xbridge"}
     seen: dict[tuple, str] = {}
     for coin, claims in staged.items():
@@ -254,6 +265,7 @@ def _safe_rel(repo_root: Path, rel: str) -> Path | None:
 def _apply_conf(  # noqa: C901, PLR0911, PLR0912  # conf-write applier: one return per write kind
     entry: dict[str, Any],
     repo_root: Path,
+    manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     rel = str(entry.get("file") or "")
     key = str(entry.get("key") or "")
@@ -298,7 +310,7 @@ def _apply_conf(  # noqa: C901, PLR0911, PLR0912  # conf-write applier: one retu
     elif path.parent.name == "xbridge-confs" and key.lower() == "port":
         port_kind = "xbridge"
     if port_kind is not None:
-        holders = _fleet_port_holders(repo_root)
+        holders = _fleet_port_holders(repo_root, manifest_path)
         if holders is None:
             return _refuse(entry, "refused: manifest unreadable — port safety unverifiable")
         holder = holders.get((port_kind, norm_port_value(str(new))))
@@ -349,12 +361,13 @@ class ManifestStore:
 def _apply_versions_append(  # conf-write applier: one return per write kind
     entry: dict[str, Any],
     repo_root: Path,
+    manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     rel = str(entry.get("file") or "")
-    manifest_path = _safe_rel(repo_root, rel)
-    if manifest_path is None or manifest_path.name != "manifest-latest.json":
+    manifest = manifest_target(repo_root, manifest_path)
+    if _safe_rel(repo_root, rel) != manifest:
         return _refuse(entry, f"refused: version append outside the manifest: {rel!r}")
-    if isinstance(loaded := ManifestStore.read(manifest_path), str):
+    if isinstance(loaded := ManifestStore.read(manifest), str):
         return _refuse(entry, loaded)
     ticker = entry.get("coin")
     item = loaded.item(ticker)
@@ -374,10 +387,11 @@ def _apply_versions_append(  # conf-write applier: one return per write kind
 def _apply_versions_collapse(  # conf-write applier: one return per write kind
     entry: dict[str, Any],
     repo_root: Path,
+    manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     rel = str(entry.get("file") or "")
-    manifest_path = _safe_rel(repo_root, rel)
-    if manifest_path is None or manifest_path.name != "manifest-latest.json":
+    manifest = manifest_target(repo_root, manifest_path)
+    if _safe_rel(repo_root, rel) != manifest:
         return _refuse(entry, f"refused: version collapse outside the manifest: {rel!r}")
     target = entry.get("target")
     old_ver_id = entry.get("old_ver_id")
@@ -385,7 +399,7 @@ def _apply_versions_collapse(  # conf-write applier: one return per write kind
     old_xc = entry.get("old_xbridge_conf")
     if not target or not old_ver_id:
         return _refuse(entry, "refused: collapse entry lacks machine fields")
-    if isinstance(loaded := ManifestStore.read(manifest_path), str):
+    if isinstance(loaded := ManifestStore.read(manifest), str):
         return _refuse(entry, loaded)
     ticker = entry.get("coin")
     item = loaded.item(ticker)
@@ -430,6 +444,49 @@ def _apply_versions_copy(entry: dict[str, Any], repo_root: Path) -> dict[str, An
     return entry
 
 
+def _apply_versions_remove(  # noqa: PLR0911  # conf-write applier: one return per refusal kind
+    entry: dict[str, Any],
+    repo_root: Path,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    """Drop a superseded conf once the collapse moved the manifest off it.
+
+    The entry refuses while any manifest row still names the file — the
+    collapsing coin's own row first, then every other row's matching conf
+    field — so a refused collapse, or a fleet row that still shares the name,
+    can never orphan a live conf by deleting its file.
+    """
+    rel = str(entry.get("file") or "")
+    old_name = entry.get("old")
+    parts = Path(rel).parts
+    field = None
+    if len(parts) == 2:  # noqa: PLR2004  # plan-entry path shape: conf entries are dir/file
+        field = {"wallet-confs": "wallet_conf", "xbridge-confs": "xbridge_conf"}.get(parts[0])
+    if field is None or not isinstance(old_name, str) or not old_name:
+        return _refuse(entry, f"refused: superseded-conf removal needs a conf path and name: {rel!r}")
+    path = _safe_rel(repo_root, rel)
+    if path is None:
+        return _refuse(entry, f"refused: path escapes the repo: {rel!r}")
+    manifest = manifest_target(repo_root, manifest_path)
+    if isinstance(loaded := ManifestStore.read(manifest), str):
+        return _refuse(entry, loaded)
+    item = loaded.item(entry.get("coin"))
+    if item is None:
+        return _refuse(entry, f"refused: {entry.get('coin')} left the manifest since planning")
+    if item.get(field) == old_name:
+        return _refuse(entry, f"refused: manifest still points at {old_name}")
+    if not path.is_file():
+        return _refuse(entry, f"refused: already gone: {rel}")
+    holders = sorted(
+        {str(e.get("ticker") or "?") for e in loaded.items if isinstance(e, dict) and e.get(field) == old_name}
+    )
+    if holders:
+        return _refuse(entry, f"refused: {old_name} is still named by {', '.join(holders)}")
+    path.unlink()
+    entry["applied"] = True
+    return entry
+
+
 def _apply_scaffold_file(entry: dict[str, Any], repo_root: Path) -> dict[str, Any]:
     rel = str(entry.get("file") or "")
     dst = _safe_rel(repo_root, rel)
@@ -446,13 +503,15 @@ def _apply_scaffold_file(entry: dict[str, Any], repo_root: Path) -> dict[str, An
     return entry
 
 
-def _apply_scaffold_manifest(entry: dict[str, Any], repo_root: Path) -> dict[str, Any]:
-    manifest_path = repo_root / "manifest-latest.json"
+def _apply_scaffold_manifest(
+    entry: dict[str, Any], repo_root: Path, manifest_path: Path | None = None
+) -> dict[str, Any]:
+    manifest = manifest_target(repo_root, manifest_path)
     snippet = entry.get("snippet")
     if not isinstance(snippet, dict):
         return _refuse(entry, "refused: staged entry carries no manifest snippet")
     ticker = snippet.get("ticker") or entry.get("coin")
-    if isinstance(loaded := ManifestStore.read(manifest_path), str):
+    if isinstance(loaded := ManifestStore.read(manifest), str):
         return _refuse(entry, loaded)
     if any(isinstance(e, dict) and e.get("ticker") == ticker for e in loaded.items):
         return _refuse(entry, f"refused: {ticker} already in the manifest")
@@ -463,10 +522,10 @@ def _apply_scaffold_manifest(entry: dict[str, Any], repo_root: Path) -> dict[str
     return entry
 
 
-def _apply_delist_manifest(entry: dict[str, Any], repo_root: Path) -> dict[str, Any]:
-    manifest_path = repo_root / "manifest-latest.json"
+def _apply_delist_manifest(entry: dict[str, Any], repo_root: Path, manifest_path: Path | None = None) -> dict[str, Any]:
+    manifest = manifest_target(repo_root, manifest_path)
     ticker = entry.get("coin")
-    if isinstance(loaded := ManifestStore.read(manifest_path), str):
+    if isinstance(loaded := ManifestStore.read(manifest), str):
         return _refuse(entry, loaded)
     kept = [e for e in loaded.items if not (isinstance(e, dict) and e.get("ticker") == ticker)]
     if len(kept) == len(loaded.items):
@@ -506,36 +565,41 @@ def _apply_delist_file(entry: dict[str, Any], repo_root: Path) -> dict[str, Any]
 def apply_entry(  # noqa: C901, PLR0911  # plan dispatcher: one return per entry kind
     entry: dict[str, Any],
     repo_root: Path,
+    manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     """Apply one reviewed entry; refusals mark only their own entry."""
     if not isinstance(entry, dict):
         return entry
+    manifest = manifest_target(repo_root, manifest_path)
+    manifest_rel = repo_relative(manifest, repo_root)
     try:
         action = entry.get("action")
         key = entry.get("key")
         if action == "delist":
-            if entry.get("file") == "manifest-latest.json":
-                return _apply_delist_manifest(entry, repo_root)
+            if entry.get("file") == manifest_rel:
+                return _apply_delist_manifest(entry, repo_root, manifest)
             return _apply_delist_file(entry, repo_root)
         if action == "scaffold":
-            if entry.get("file") == "manifest-latest.json":
-                return _apply_scaffold_manifest(entry, repo_root)
+            if entry.get("file") == manifest_rel:
+                return _apply_scaffold_manifest(entry, repo_root, manifest)
             return _apply_scaffold_file(entry, repo_root)
         if action == "versions" and key == "*":
             return _apply_versions_copy(entry, repo_root)
+        if action == "versions" and key == "-":
+            return _apply_versions_remove(entry, repo_root, manifest)
         if action == "versions" and isinstance(key, str) and key.endswith(".versions"):
-            return _apply_versions_append(entry, repo_root)
+            return _apply_versions_append(entry, repo_root, manifest)
         if action == "versions":
-            return _apply_versions_collapse(entry, repo_root)
+            return _apply_versions_collapse(entry, repo_root, manifest)
         if action in ("txindex", "dust", "deprecatedrpc", "fees", "port"):
-            return _apply_conf(entry, repo_root)
+            return _apply_conf(entry, repo_root, manifest)
         return _refuse(entry, f"refused: unknown action {action!r}")
     except Exception as exc:
         return _refuse(entry, f"refused: write failed: {exc}")
 
 
 def _scaffold_preblocks(  # noqa: C901  # preblock derivation: one branch per entry kind
-    entries: list[dict[str, Any]], repo_root: Path
+    entries: list[dict[str, Any]], repo_root: Path, manifest_path: Path | None = None
 ) -> dict[str, str]:
     """Coins whose staged triple cannot land as a unit, by coin.
 
@@ -544,11 +608,13 @@ def _scaffold_preblocks(  # noqa: C901  # preblock derivation: one branch per en
     three entries upfront instead of writing two confs and then
     refusing the manifest (or vice versa).
     """
-    blocked = dict(_scaffold_conflicts(entries, repo_root))
+    blocked = dict(_scaffold_conflicts(entries, repo_root, manifest_path))
     staged_coins = {str(e.get("coin")) for e in entries if e.get("action") == "scaffold" and e.get("coin")}
     if not staged_coins:
         return blocked
-    if isinstance(loaded := ManifestStore.read(repo_root / "manifest-latest.json"), str):
+    manifest = manifest_target(repo_root, manifest_path)
+    manifest_rel = repo_relative(manifest, repo_root)
+    if isinstance(loaded := ManifestStore.read(manifest), str):
         for coin in staged_coins:
             blocked.setdefault(
                 coin,
@@ -563,7 +629,7 @@ def _scaffold_preblocks(  # noqa: C901  # preblock derivation: one branch per en
             continue
         coin = str(e.get("coin"))
         rel = str(e.get("file") or "")
-        if rel == "manifest-latest.json":
+        if rel == manifest_rel:
             if coin in tickers:
                 blocked.setdefault(coin, f"{coin} already in the manifest")
             if not isinstance(e.get("snippet"), dict):
@@ -578,7 +644,7 @@ def _scaffold_preblocks(  # noqa: C901  # preblock derivation: one branch per en
     return blocked
 
 
-def _rollback_partial_scaffolds(out: list[dict[str, Any]], repo_root: Path) -> None:
+def _rollback_partial_scaffolds(out: list[dict[str, Any]], repo_root: Path, manifest_path: Path | None = None) -> None:
     """Restore the no-partial-coin invariant for scaffold batches.
 
     Scaffold entries are new files only (the applier refuses existing
@@ -586,6 +652,8 @@ def _rollback_partial_scaffolds(out: list[dict[str, Any]], repo_root: Path) -> N
     A manifest row for a refused coin is reverted the same way, by
     removing the staged ticker — never touching other entries.
     """
+    manifest = manifest_target(repo_root, manifest_path)
+    manifest_rel = repo_relative(manifest, repo_root)
     by_coin: dict[Any, list[dict[str, Any]]] = {}
     for e in out:
         if e.get("action") == "scaffold" and e.get("coin"):
@@ -596,7 +664,7 @@ def _rollback_partial_scaffolds(out: list[dict[str, Any]], repo_root: Path) -> N
         for r in rows:
             if not r.get("applied"):
                 continue
-            if r.get("file") != "manifest-latest.json":
+            if r.get("file") != manifest_rel:
                 path = _safe_rel(repo_root, str(r.get("file") or ""))
                 try:
                     if path is not None and path.is_file():
@@ -604,14 +672,14 @@ def _rollback_partial_scaffolds(out: list[dict[str, Any]], repo_root: Path) -> N
                 except OSError as exc:
                     logger.warning("rollback %s failed: %s", path, exc)
             else:
-                _remove_staged_ticker(repo_root, coin)
+                _remove_staged_ticker(manifest, coin)
             r["applied"] = False
             r["error"] = f"refused: rolled back partial scaffold for {coin}"
 
 
-def _remove_staged_ticker(repo_root: Path, coin: Any) -> None:
+def _remove_staged_ticker(manifest_path: Path, coin: Any) -> None:
     """Remove one staged ticker from the manifest, if present."""
-    loaded = ManifestStore.read(repo_root / "manifest-latest.json")
+    loaded = ManifestStore.read(manifest_path)
     if isinstance(loaded, str):
         return
     kept = [e for e in loaded.items if not (isinstance(e, dict) and e.get("ticker") == coin)]
@@ -654,21 +722,24 @@ def apply_entries(
     runner: SystemCommandRunner | None = None,
     *,
     regenerate: bool = True,
+    manifest_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Apply reviewed entries in order; regenerate base.j2 once after.
 
     ``regenerate=False`` defers the generator round to a batch caller
     that applies several plans and regenerates once at the end.
+    ``manifest_path`` is the manifest the run was pointed at, or None
+    for the default name under ``repo_root``.
     """
-    blocked = _scaffold_preblocks(entries, repo_root)
+    blocked = _scaffold_preblocks(entries, repo_root, manifest_path)
     out = []
     for e in entries:
         coin = e.get("coin")
         if e.get("action") == "scaffold" and coin in blocked:
             out.append(_refuse(e, f"refused: {blocked[str(coin)]}"))
         else:
-            out.append(apply_entry(e, repo_root))
-    _rollback_partial_scaffolds(out, repo_root)
+            out.append(apply_entry(e, repo_root, manifest_path))
+    _rollback_partial_scaffolds(out, repo_root, manifest_path)
     if regenerate:
         regenerate_for(out, repo_root, runner)
     return out
@@ -680,11 +751,14 @@ def apply_plan_file(  # noqa: C901, PLR0912  # apply orchestrator: one branch pe
     runner: SystemCommandRunner,
     *,
     dry_run: bool = False,
-) -> tuple:
+    manifest_path: Path | None = None,
+) -> tuple[int, list[dict[str, Any]]]:
     """Apply a plan file's entries and rewrite it with applied flags.
 
     Under ``dry_run`` the entries are reported as they would apply and
     nothing on disk changes — no conf writes, no plan rewrite.
+    ``manifest_path`` is the manifest the run was pointed at, or None
+    for the default name under ``repo_root``.
     """
     try:
         payload = json.loads(plan_path.read_text(encoding="utf-8"))
@@ -709,7 +783,7 @@ def apply_plan_file(  # noqa: C901, PLR0912  # apply orchestrator: one branch pe
         if dropped:
             report_line(f"  dropped {dropped} unreadable row(s)")
         return 0, entries
-    out = apply_entries(entries, repo_root, runner)
+    out = apply_entries(entries, repo_root, runner, manifest_path=manifest_path)
     if isinstance(payload, dict):
         payload = {**payload, "plan": out}
     else:

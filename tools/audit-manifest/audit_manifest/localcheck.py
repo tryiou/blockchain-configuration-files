@@ -35,6 +35,9 @@ class ManifestCrossChecker:
             vers = entry.get("versions") or {}
             return vers if isinstance(vers, dict) else {}
         except Exception:
+            # A malformed or non-object base.j2 has no version map to
+            # read; {} means "no local version resolution", never an
+            # audit crash over a template file.
             return {}
 
     @classmethod
@@ -108,7 +111,7 @@ def crosscheck_local(manifest_path: Path, full_manifest: list[ManifestCoin]) -> 
     if not local["missing_base_j2"]:
         report_line("  missing base.j2: none")
     for ticker in sorted(set(local["missing_base_j2"])):
-        report_line(f"  missing base.j2: {ticker}.base.j2")
+        report_line(f"  missing base.j2: {(ticker or '').lower()}.base.j2")
     for dname, orphs in local["orphans"].items():
         if not orphs:
             report_line(f"  orphan {dname}: none")

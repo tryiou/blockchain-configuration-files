@@ -85,7 +85,7 @@ class SourceCheckoutManager:
         """Resolve local source for the exact tag string only (see resolve_for)."""
         return self.resolve_for(coin.ticker, coin.repo_url, tag, timeout)
 
-    def resolve_for(  # noqa: C901, PLR0911, PLR0912  # checkout state machine: one return per resolution outcome
+    def resolve_for(  # noqa: PLR0911  # checkout state machine: one return per resolution outcome
         self,
         ticker: str,
         repo_url: str | None,
@@ -154,58 +154,7 @@ class SourceCheckoutManager:
                     target,
                 )
                 return None, "clone-failed"
-            # Clone into a process-private staging folder, then rename into
-            # place. The final folder is only ever created by this call's
-            # atomic rename and is never rmtree'd, so a folder created by a
-            # concurrent run between our existence check and our clone can
-            # never be wiped by us.
-            staging = target.parent / f".{ticker}.{os.getpid()}.staging"
-            shutil.rmtree(staging, ignore_errors=True)
-            proc = self.runner.run(
-                ["git", "clone", "-q", "--depth", "1", "--branch", tag, repo_url, str(staging)],
-                op_timeout,
-                env_extra={"GIT_TERMINAL_PROMPT": "0"},
-            )
-            if proc is not None and proc.returncode == 0:
-                if self._head_is(staging, tag, timeout):
-                    stage = None
-                else:
-                    # Landed off the tag (a same-named branch shadowing
-                    # it): recover exactly like the update path does
-                    # instead of failing on every future run.
-                    stage = self._switch_to_tag(staging, repo_url, tag, timeout, op_timeout)
-                if stage is None:
-                    try:
-                        staging.rename(target)
-                    except OSError:
-                        # A concurrent run won the folder; keep theirs, drop ours.
-                        shutil.rmtree(staging, ignore_errors=True)
-                        logger.error(
-                            "CLONE-FAILED %s @ %s: another run created %s first, this clone was dropped",
-                            ticker,
-                            tag,
-                            target,
-                        )
-                        return None, "clone-failed"
-                    return target, "cloned"
-                logger.error(
-                    "CLONE-FAILED %s @ %s: %s (refs/tags/%s may be shadowed by a branch or absent upstream)",
-                    ticker,
-                    tag,
-                    stage,
-                    tag,
-                )
-            else:
-                logger.error(
-                    "CLONE-FAILED %s @ %s: git clone failed (rc=%s)%s",
-                    ticker,
-                    tag,
-                    (proc.returncode if proc else "no-output"),
-                    _stderr_note(proc),
-                )
-            # Whatever remains here is staging this call created (pid-private).
-            shutil.rmtree(staging, ignore_errors=True)
-            return None, "clone-failed"
+            return self._clone_fresh(ticker, repo_url, tag, target, timeout, op_timeout)
 
         if not self._is_own_worktree(target, timeout):
             logger.error(
@@ -234,6 +183,66 @@ class SourceCheckoutManager:
             )
             return None, "fetch-failed"
         return target, "fetched"
+
+    def _clone_fresh(  # noqa: PLR0913, PLR0917  # every ingredient of one clone: identity, source, tag, folder, timeouts
+        self, ticker: str, repo_url: str, tag: str, target: Path, timeout: int, op_timeout: int
+    ) -> tuple[Path | None, str]:
+        """Shallow-clone the tag into a pid-private staging folder, then rename.
+
+        The final folder is only ever created by this call's atomic
+        rename and is never rmtree'd, so a folder created by a
+        concurrent run between our existence check and our clone can
+        never be wiped by us. A clone that lands off the tag (a
+        same-named branch shadowing it) recovers through the same tag
+        switch the update path uses.
+        """
+        staging = target.parent / f".{ticker}.{os.getpid()}.staging"
+        shutil.rmtree(staging, ignore_errors=True)
+        proc = self.runner.run(
+            ["git", "clone", "-q", "--depth", "1", "--branch", tag, repo_url, str(staging)],
+            op_timeout,
+            env_extra={"GIT_TERMINAL_PROMPT": "0"},
+        )
+        if proc is not None and proc.returncode == 0:
+            if self._head_is(staging, tag, timeout):
+                stage = None
+            else:
+                # Landed off the tag (a same-named branch shadowing
+                # it): recover exactly like the update path does
+                # instead of failing on every future run.
+                stage = self._switch_to_tag(staging, repo_url, tag, timeout, op_timeout)
+            if stage is None:
+                try:
+                    staging.rename(target)
+                except OSError:
+                    # A concurrent run won the folder; keep theirs, drop ours.
+                    shutil.rmtree(staging, ignore_errors=True)
+                    logger.error(
+                        "CLONE-FAILED %s @ %s: another run created %s first, this clone was dropped",
+                        ticker,
+                        tag,
+                        target,
+                    )
+                    return None, "clone-failed"
+                return target, "cloned"
+            logger.error(
+                "CLONE-FAILED %s @ %s: %s (refs/tags/%s may be shadowed by a branch or absent upstream)",
+                ticker,
+                tag,
+                stage,
+                tag,
+            )
+        else:
+            logger.error(
+                "CLONE-FAILED %s @ %s: git clone failed (rc=%s)%s",
+                ticker,
+                tag,
+                (proc.returncode if proc else "no-output"),
+                _stderr_note(proc),
+            )
+        # Whatever remains here is staging this call created (pid-private).
+        shutil.rmtree(staging, ignore_errors=True)
+        return None, "clone-failed"
 
     def _switch_to_tag(self, target: Path, repo_url: str, tag: str, timeout: int, op_timeout: int) -> str | None:
         """Fetch the exact tag into ``target`` and switch to it.
@@ -394,6 +403,19 @@ class SourceReader:
         """
         path = cls._resolve_src(src_dir, rel_path)
         return cls.slurp(path) if path is not None else None
+
+    @classmethod
+    def read_src(cls, src_dir: Path, rel_path: str) -> str | None:
+        """slurp_src, plus the direct-tree read its None does not imply.
+
+        The path-resolution memo caches misses too, so ``slurp_src`` can
+        return None for a file that has appeared since the tree was
+        first probed (a scaffold writes sources into a live checkout).
+        The direct read is one stat against that, and it is the only
+        read that can see such a file without a full re-walk; content
+        is read fresh either way.
+        """
+        return cls.slurp_src(src_dir, rel_path) or cls.slurp(src_dir / rel_path)
 
     @classmethod
     def _resolve_src(cls, src_dir: Path, rel_path: str) -> Path | None:

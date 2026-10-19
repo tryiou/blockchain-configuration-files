@@ -10,7 +10,6 @@ from __future__ import annotations
 import ast
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -219,36 +218,6 @@ def repo_relative(path: Path, repo_root: Path | None = None) -> str:
     return str(path)
 
 
-@dataclass(frozen=True)
-class PlanEntry:
-    """One planned or applied write; ``to_dict`` is the report/plan wire format."""
-
-    action: str
-    file: str
-    key: str
-    old: Any
-    new: Any
-    reason: str
-    coin: str | None = None
-    ver_id: str | None = None
-    evidence: str | None = None
-    applied: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "action": self.action,
-            "file": self.file,
-            "key": self.key,
-            "old": self.old,
-            "new": self.new,
-            "reason": self.reason,
-            "coin": self.coin,
-            "ver_id": self.ver_id,
-            "evidence": self.evidence,
-            "applied": self.applied,
-        }
-
-
 def plan_entry(  # noqa: PLR0913, PLR0917  # the plan-entry schema verbatim: one field per report column
     file: str,
     key: str,
@@ -269,20 +238,21 @@ def plan_entry(  # noqa: PLR0913, PLR0917  # the plan-entry schema verbatim: one
     ``applied`` differs. It is truthy, so callers that used the old return
     value as an "a change was made" flag still work; a no-op returns ``{}``.
 
-    ``file`` is repo-relative so plans are stable across machines.
+    ``file`` is repo-relative so plans are stable across machines. The dict
+    IS the plan/report wire format — one construction path, nothing to drift.
     """
-    return PlanEntry(
-        action=action,
-        file=file,
-        key=key,
-        old=old,
-        new=new,
-        reason=reason,
-        coin=coin,
-        ver_id=ver_id,
-        evidence=evidence,
-        applied=applied,
-    ).to_dict()
+    return {
+        "action": action,
+        "file": file,
+        "key": key,
+        "old": old,
+        "new": new,
+        "reason": reason,
+        "coin": coin,
+        "ver_id": ver_id,
+        "evidence": evidence,
+        "applied": applied,
+    }
 
 
 def entry_changelog_quote(changelog_findings: list[dict[str, Any]], newer_same: list[str], newer_alt: list[str]) -> str:

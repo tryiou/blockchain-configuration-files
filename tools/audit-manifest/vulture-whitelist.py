@@ -13,7 +13,11 @@
 # pytest autouse fixtures in tests/conftest.py are invoked by the framework,
 # never by name from this tree, so vulture marks them unused.
 #
-# Usage: python -m vulture . --exclude vulture-whitelist.py vulture-whitelist.py --min-confidence 60
+# The mode-switch table in dashboard/verbs.py reads its namespace attributes
+# by name (getattr(opts, attr, False)), so the attribute scan cannot see the
+# reads. The names are the real CLI flags, used exactly as written.
+#
+# Usage: python -m vulture . vulture-whitelist.py --min-confidence 60
 
 _ = object()
 
@@ -50,3 +54,6 @@ _.btn_apply
 _.get_default_screen
 _.no
 _.submitted
+_.with_probe
+_.with_changelog
+_.with_versions

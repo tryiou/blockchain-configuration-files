@@ -27,7 +27,7 @@ limits**.
 | `tools/audit-manifest/audit-manifest.py` | Shim (59 lines) into `audit_manifest/` |
 | `tools/audit-manifest/audit_manifest/` | Engine: probe, param-check, fixers, applier (`apply_plan.py`), scaffold, versions |
 | `tools/audit-manifest/dashboard/` | Textual TUI: verbs, runner, screens, widgets, state, paths (`model.py` holds pure fleet math) |
-| `tools/audit-manifest/requirements.txt` | Optional: Textual, needed only by the dashboard's TUI |
+| `tools/audit-manifest/requirements.txt` | Optional: textual for the TUI; ruff and mypy for the test/lint gates |
 | `tools/audit-manifest/tests/` | Its tests: `test_audit_manifest_*` cover the tool, `test_dashboard_*` the dashboard |
 | `tools/audit-manifest/README.md` | This file |
 | `.cache/audit-manifest/` | Local scratch: source clones + changelog cache + reports. Gitignored, never committed |
@@ -309,7 +309,9 @@ python3 -m venv .venv
 * Console output is always printed; `--report <path>` additionally writes one
   parsable JSON file. Never commit reports.
 * `0` — all probed repos reachable
-* `1` — at least one repo dead, moved, or unresolved
+* `1` — at least one repo dead, moved, or unresolved; or a write verb refused
+  an entry at apply time (it no longer matched the tree, so nothing was written
+  for it)
 * `2` — usage / manifest-load error
 
 `dashboard.py` in verb mode keeps its own contract, which answers a

@@ -178,7 +178,7 @@ class CommonParamCheckers:
     def _dust_factor(src_dir: Path) -> int:
         """3 when a source file applies the 3x dust multiplier, else 1."""
         for cand in _DUST_FACTOR_SOURCES:
-            t = SourceReader.slurp_src(src_dir, cand) or SourceReader.slurp(src_dir / cand)
+            t = SourceReader.read_src(src_dir, cand)
             if t and any(k in t for k in _DUST_FACTOR_MARKERS):
                 return 3
         return 1
@@ -187,7 +187,7 @@ class CommonParamCheckers:
     def _has_segwit(src_dir: Path) -> bool:
         """True when policy.cpp proves a witness-aware IsDust."""
         cand = "src/policy/policy.cpp"
-        t = SourceReader.slurp_src(src_dir, cand) or SourceReader.slurp(src_dir / cand)
+        t = SourceReader.read_src(src_dir, cand)
         return bool(t and "WITNESS_SCALE_FACTOR" in t and "IsWitnessProgram" in t)
 
     @staticmethod

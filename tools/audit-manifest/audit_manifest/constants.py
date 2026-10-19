@@ -19,7 +19,10 @@ SCRIPT_DIR = Path(__file__).resolve().parents[1]
 # This repository's root: <repo>/tools/audit-manifest/ -> <repo>
 REPO_ROOT = SCRIPT_DIR.parents[1]
 
-DEFAULT_MANIFEST = REPO_ROOT / "manifest-latest.json"
+DEFAULT_MANIFEST_NAME = "manifest-latest.json"
+# The name is the single spelling of the default manifest file: plans,
+# appliers and the dashboard all derive from it, so a rename cannot drift.
+DEFAULT_MANIFEST = REPO_ROOT / DEFAULT_MANIFEST_NAME
 
 # Local scratch for source clones and the changelog cache. Gitignored, never
 # committed; purge it to force fresh probes.

@@ -198,6 +198,27 @@ def test_invalidate_re_resolves_a_replaced_tree():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_read_src_sees_a_file_that_appeared_after_a_miss():
+    """A memoized miss does not prove the direct file is absent.
+
+    The wrapper walk is memoized per checkout state — misses included —
+    while a scaffold writes sources into a live checkout after the first
+    probe. read_src's direct read is the only thing that observes such a
+    file without a full re-walk; slurp_src keeps answering the memoized
+    miss until the tree-mutation hook runs.
+    """
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        rel = "src/policy/policy.cpp"
+        assert SourceReader.slurp_src(tmp, rel) is None
+        _mksrc(tmp, rel, "written after the miss")
+        assert SourceReader.slurp_src(tmp, rel) is None
+        assert SourceReader.read_src(tmp, rel) == "written after the miss"
+    finally:
+        SourceReader.invalidate()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_wrapper_order_matches_a_fresh_walk():
     """The memoized wrapper snapshot resolves to the same file a walk would.
 

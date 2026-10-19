@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .apply_plan import apply_entries
+from .apply_plan import apply_entries, manifest_target
 from .checkout import (
     SourceCheckoutManager,
     SourceReader,
@@ -32,13 +32,13 @@ from .inspectors import (
     mainnet_slice,
     regex_in_block,
 )
-from .inspectors.base import NTIME_SERIALIZED_RE
+from .inspectors.base import NTIME_SERIALIZED_RE, line_of
 from .model import ManifestCoin, RepoStatus, recommended_fees
 from .ports import PortCollisionManager
 from .probe import RemoteProbeService, SystemCommandRunner
 from .progress import emit
 from .reporting import report_line
-from .util import _safe_arith_float, plan_entry
+from .util import _safe_arith_float, plan_entry, repo_relative
 from .versioning import VersionEngine
 
 # Coins whose scaffolded network IS the testnet. There is no reliable
@@ -62,6 +62,7 @@ def scaffold_target_checks(
     wallet_name: str,
     xbridge_name: str,
     repo_root: Path,
+    manifest_path: Path | None = None,
 ) -> str | None:
     """Upfront all-or-nothing gate: no partial coin ever lands."""
     real_w = repo_root / "wallet-confs" / wallet_name
@@ -69,7 +70,7 @@ def scaffold_target_checks(
     if real_w.exists() or real_x.exists():
         return f"--apply target already exists: {real_w} or {real_x}"
     try:
-        raw = json.loads((repo_root / "manifest-latest.json").read_text(encoding="utf-8"))
+        raw = json.loads(manifest_target(repo_root, manifest_path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return "--apply manifest unreadable"
     if not isinstance(raw, list):
@@ -104,6 +105,7 @@ def scaffold_plan_entries(  # noqa: PLR0913, PLR0917  # scaffold plan-entry sche
     wallet_txt: str,
     xbridge_txt: str,
     manifest_snippet: dict[str, Any],
+    manifest_rel: str,
 ) -> list[dict[str, Any]]:
     """Staged entries embed everything Apply needs: file bytes inline."""
     entries = [
@@ -130,7 +132,7 @@ def scaffold_plan_entries(  # noqa: PLR0913, PLR0917  # scaffold plan-entry sche
             applied=False,
         ),
         plan_entry(
-            "manifest-latest.json",
+            manifest_rel,
             ticker,
             None,
             ver_id,
@@ -158,11 +160,11 @@ def _scaffold_ports(txt: str | None, txt2: str | None, *, want_test: bool) -> di
     if txt2 is not None:
         m = re.search(r"nRPCPort\s*=\s*(\d+)", txt2)
         if m:
-            out["rpcport"] = (int(m.group(1)), f"src/chainparamsbase.cpp:{txt2[: m.start()].count(chr(10)) + 1}")
+            out["rpcport"] = (int(m.group(1)), f"src/chainparamsbase.cpp:{line_of(txt2, m)}")
         else:
             tm = re.search(r'CBaseChainParams[^"]*"[^"]*",\s*(\d+)', txt2)
             if tm:
-                out["rpcport"] = (int(tm.group(1)), f"src/chainparamsbase.cpp:{txt2[: tm.start()].count(chr(10)) + 1}")
+                out["rpcport"] = (int(tm.group(1)), f"src/chainparamsbase.cpp:{line_of(txt2, tm)}")
     return out
 
 
@@ -190,7 +192,7 @@ def _scaffold_prefixes(txt: str | None, *, want_test: bool, src_dir: Path) -> di
 def _scaffold_coin_value(src_dir: Path) -> dict[str, Any]:
     """COIN from amount.h (CAmount CENT), wrapper-aware."""
     for rel in ("src/amount.h", "src/consensus/amount.h"):
-        atxt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        atxt = SourceReader.read_src(src_dir, rel)
         if atxt is None:
             continue
         v, ev = coin_value_from_amount_h(atxt, rel, src_dir)
@@ -243,7 +245,7 @@ def _scaffold_tx_wire(ttxt: str | None, src_dir: Path) -> dict[str, Any]:
     if vtxt is not None:
         m = re.search(r"DEFAULT_TXINDEX\s*=\s*(true|false)", vtxt)
         if m:
-            out["DEFAULT_TXINDEX"] = (m.group(1) == "true", f"src/validation.h:{vtxt[: m.start()].count(chr(10)) + 1}")
+            out["DEFAULT_TXINDEX"] = (m.group(1) == "true", f"src/validation.h:{line_of(vtxt, m)}")
     return out
 
 
@@ -514,26 +516,29 @@ class CoinScaffolder:
         xbridge_name: str,
         out_dir: Path,
         result: dict[str, Any],
+        manifest_path: Path | None = None,
     ) -> int | None:
         """Run the --apply write path behind the all-or-nothing gate.
 
         Returns None when the verb was print-only (caller continues), an
         exit code when the run is over.
         """
+        manifest = manifest_target(repo_root, manifest_path)
+        manifest_rel = repo_relative(manifest, repo_root)
         dry_run = bool(getattr(args, "dry_run", False))
         if args.apply and dry_run:
             report_line(
                 f"Dry-run: would write {repo_root / 'wallet-confs' / wallet_name} and "
-                f"{repo_root / 'xbridge-confs' / xbridge_name} and patch manifest-latest.json "
+                f"{repo_root / 'xbridge-confs' / xbridge_name} and patch {manifest_rel} "
                 f"(suppressed by --dry-run)"
             )
         elif args.apply:
-            gate = scaffold_target_checks(ticker, wallet_name, xbridge_name, repo_root)
+            gate = scaffold_target_checks(ticker, wallet_name, xbridge_name, repo_root, manifest)
             if gate is not None:
                 report_line(f"ERROR: {gate}")
                 result["error"] = gate
                 return 1
-            out = apply_entries(plan, repo_root)
+            out = apply_entries(plan, repo_root, manifest_path=manifest)
             refused = [e for e in out if not e.get("applied")]
             for e in refused:
                 report_line(f"  refused {e.get('coin')}: {e.get('file')} — {e.get('error')}")
@@ -541,7 +546,7 @@ class CoinScaffolder:
                 result["error"] = refused[0].get("error")
                 return 1
             try:
-                raw = json.loads((repo_root / "manifest-latest.json").read_text(encoding="utf-8"))
+                raw = json.loads(manifest.read_text(encoding="utf-8"))
                 raw_count = len(raw) if isinstance(raw, list) else 0
             except (OSError, ValueError):
                 raw_count = 0
@@ -670,8 +675,71 @@ class CoinScaffolder:
             report_line(f"Cloned {tag} into {target}")
         return target, 0
 
-    def run(  # noqa: PLR0911, PLR0915  # a CLI verb: each failure path returns its structured (rc, envelope); stages are named helpers below
-        self, args: argparse.Namespace, manifest: list[ManifestCoin], repo_root: Path
+    def _propose_and_report_ports(
+        self,
+        ticker: str,
+        params: dict[str, Any],
+        manifest: list[ManifestCoin],
+        repo_root: Path,
+        result: dict[str, Any],
+    ) -> tuple[int, int] | None:
+        """Propose a free p2p/rpc pair and report the choice.
+
+        Returns the pair, or None when the fleet is crowded out (the
+        refusal line is already reported and ``result`` carries it).
+        """
+        emit("scaffold-ports", ticker=ticker)
+        proposed, src_port, src_rpc = self._propose_scaffold_ports(params, manifest, repo_root)
+        if proposed is None:
+            report_line(f"ERROR: no free p2p/rpc pair near source {src_port}/{src_rpc} — fleet is crowded out")
+            result["error"] = f"no free p2p/rpc pair near source {src_port}/{src_rpc}"
+            return None
+        p2p, rpc = proposed
+        if (p2p, rpc) != (src_port, src_rpc):
+            report_line(f"Port collision: source p2p {src_port} rpc {src_rpc} -> proposing free p2p {p2p} rpc {rpc}")
+        else:
+            report_line(f"Ports p2p {p2p} rpc {rpc} are free (no collision)")
+        return p2p, rpc
+
+    def _fee_gate(self, params: dict[str, Any], result: dict[str, Any]) -> tuple[int, int] | None:
+        """(MinTxFee, FeePerByte) from the resolved fee policy.
+
+        No MinTxFee/FeePerByte may ever be a silent default, so an
+        unresolvable fee source refuses the whole scaffold before any
+        conf generation; the refusal line is reported and ``result``
+        carries it.
+        """
+        relay_entry = params.get("relay_rate")
+        fee_policy = params.get("fee_policy")
+        if relay_entry is None or relay_entry[0] in (None, 0) or fee_policy is None or fee_policy.rounding == "unknown":
+            report_line(
+                "ERROR: fee source unresolvable — refusing silent defaults "
+                "(no MinTxFee/FeePerByte emitted). Provide a source tree with "
+                "parseable relay/inclusion constants and GetFee body."
+            )
+            result["error"] = "fee source unresolvable — refusing silent defaults"
+            return None
+        return recommended_fees(fee_policy, relay_entry[0])
+
+    def _scaffold_identity(self, target: Path, ticker: str, tag: str, args: argparse.Namespace) -> dict[str, Any]:
+        """Identity, ver_id and the conventional conf names for this coin."""
+        title = getattr(args, "scaffold_name", None) or ticker.title()
+        ident = CoinScaffolder.derive_identity(target, ticker)
+        report_line(
+            f"Identity: daemon {ident['daemon']} conf {ident['conf_name']} "
+            f"dirs {ident['dir_linux']}/{ident['dir_mac']}/{ident['dir_win']}"
+        )
+        ver_id = f"{ident['stem']}--{tag}"
+        return {
+            "title": title,
+            "ident": ident,
+            "ver_id": ver_id,
+            "wallet_name": f"{ver_id}.conf",
+            "xbridge_name": f"{ver_id}.conf",
+        }
+
+    def run(  # noqa: PLR0911  # a CLI verb: each failure path returns its structured (rc, envelope); stages are named helpers below
+        self, args: argparse.Namespace, manifest: list[ManifestCoin], repo_root: Path, manifest_path: Path | None = None
     ) -> tuple[int, dict[str, Any]]:
         # Envelope handed back to main() for --report. Scaffold runs no audit,
         # so repos/local/findings stay empty and the substance is plan[] plus
@@ -684,7 +752,9 @@ class CoinScaffolder:
             "error": None,
         }
         repo_url, ticker, rc = self._scaffold_prelude(args, result)
-        if rc:
+        if rc or repo_url is None or ticker is None:
+            # rc==0 guarantees both are set (the prelude's contract); the
+            # None arms exist only on its refusal paths.
             return rc, result
         tag, rc, tag_err = self._resolve_scaffold_tag(args, ticker, repo_url)
         if tag is None:
@@ -700,44 +770,27 @@ class CoinScaffolder:
         emit("scaffold-extract", ticker=ticker)
         params = self.extract_scaffold_params(target, want_test=want_test)
 
-        emit("scaffold-ports", ticker=ticker)
-        proposed, src_port, src_rpc = self._propose_scaffold_ports(params, manifest, repo_root)
-        if proposed is None:
-            report_line(f"ERROR: no free p2p/rpc pair near source {src_port}/{src_rpc} — fleet is crowded out")
-            result["error"] = f"no free p2p/rpc pair near source {src_port}/{src_rpc}"
+        pair = self._propose_and_report_ports(ticker, params, manifest, repo_root, result)
+        if pair is None:
             return 1, result
-        p2p, rpc = proposed
-        if (p2p, rpc) != (src_port, src_rpc):
-            report_line(f"Port collision: source p2p {src_port} rpc {src_rpc} -> proposing free p2p {p2p} rpc {rpc}")
-        else:
-            report_line(f"Ports p2p {p2p} rpc {rpc} are free (no collision)")
+        p2p, rpc = pair
 
-        # The fee gate refuses the whole scaffold: no MinTxFee/FeePerByte may
-        # ever be a silent default, so it runs before any conf generation.
-        relay_entry = params.get("relay_rate")
-        fee_policy = params.get("fee_policy")
-        if relay_entry is None or relay_entry[0] in (None, 0) or fee_policy is None or fee_policy.rounding == "unknown":
-            report_line(
-                "ERROR: fee source unresolvable — refusing silent defaults "
-                "(no MinTxFee/FeePerByte emitted). Provide a source tree with "
-                "parseable relay/inclusion constants and GetFee body."
-            )
-            result["error"] = "fee source unresolvable — refusing silent defaults"
+        fees = self._fee_gate(params, result)
+        if fees is None:
             return 1, result
-        relay = relay_entry[0]
-        mtf, fpb = recommended_fees(fee_policy, relay)
+        mtf, fpb = fees
 
         # Conventional (unparsed) defaults are marked inside the generator
         # and reported below — matching the fee refusal above: no silent
         # defaults.
         conventional: list[str] = []
 
-        title = getattr(args, "scaffold_name", None) or ticker.title()
-        ident = CoinScaffolder.derive_identity(target, ticker)
-        report_line(
-            f"Identity: daemon {ident['daemon']} conf {ident['conf_name']} "
-            f"dirs {ident['dir_linux']}/{ident['dir_mac']}/{ident['dir_win']}"
-        )
+        ident_map = self._scaffold_identity(target, ticker, tag, args)
+        title = ident_map["title"]
+        ident = ident_map["ident"]
+        ver_id = ident_map["ver_id"]
+        wallet_name = ident_map["wallet_name"]
+        xbridge_name = ident_map["xbridge_name"]
         family = params.get("_family", "btc")
 
         wallet_txt, xbridge_txt = self._generate_conf_pair(
@@ -752,10 +805,6 @@ class CoinScaffolder:
         )
         if conventional:
             report_line("NOTE: conventional defaults used (not parsed from source): " + ", ".join(conventional))
-
-        ver_id = f"{ident['stem']}--{tag}"
-        wallet_name = f"{ver_id}.conf"
-        xbridge_name = f"{ver_id}.conf"
 
         emit("scaffold-write", ticker=ticker)
         out_dir = (
@@ -815,6 +864,7 @@ class CoinScaffolder:
                 wallet_txt,
                 xbridge_txt,
                 manifest_snippet,
+                repo_relative(manifest_target(repo_root, manifest_path), repo_root),
             )
         )
         result.update(
@@ -833,7 +883,7 @@ class CoinScaffolder:
             }
         )
 
-        rc = self._apply_scaffold(
+        applied_rc = self._apply_scaffold(
             args=args,
             plan=plan,
             repo_root=repo_root,
@@ -842,9 +892,10 @@ class CoinScaffolder:
             xbridge_name=xbridge_name,
             out_dir=out_dir,
             result=result,
+            manifest_path=manifest_path,
         )
-        if rc is not None:
-            return rc, result
+        if applied_rc is not None:
+            return applied_rc, result
 
         report_line(f"Source checkout kept at {target} for inspection (a later pass may switch it)")
         return 0, result

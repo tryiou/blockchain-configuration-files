@@ -87,7 +87,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     scope = parser.add_argument_group("scope")
-    scope.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to manifest-latest.json")
+    scope.add_argument("--manifest", default=str(DEFAULT_MANIFEST), help="Path to the fleet manifest JSON")
     scope.add_argument("--ticker", default=None, help="Comma-separated ticker filter, e.g. BTC,LTC")
     scope.add_argument("--batch", default=None, help="Batch label for report meta, e.g. 02/11")
     scope.add_argument(
@@ -286,19 +286,20 @@ def apply_flag_implications(args: argparse.Namespace, emit=report_line) -> argpa
     return args
 
 
-def _scaffold_verb(
+def _scaffold_verb(  # noqa: PLR0913, PLR0917  # verb wrapper: one parameter per verb input
     args: argparse.Namespace,
     manifest: list[ManifestCoin],
     repo_root: Path,
     runner: SystemCommandRunner,
     probe_service: RemoteProbeService,
+    manifest_path: Path,
 ) -> int:
     """The --scaffold verb: extract, generate, stage; report if asked.
 
     Scaffold runs no audit, so the report's fleet sections are empty and
     the substance is the plan plus the raw scaffold payload.
     """
-    rc, scaffold_result = CoinScaffolder(runner, probe_service).run(args, manifest, repo_root)
+    rc, scaffold_result = CoinScaffolder(runner, probe_service).run(args, manifest, repo_root, manifest_path)
     if args.report:
         payload = build_report(
             ReportInputs(
@@ -317,12 +318,14 @@ def _apply_plan_verb(
     manifest: list[ManifestCoin],
     repo_root: Path,
     runner: SystemCommandRunner,
+    manifest_path: Path,
 ) -> int:
     """The --apply-plan verb: apply a reviewed plan file."""
     rc, out = apply_plan_file(
         Path(args.apply_plan),
         repo_root,
         runner,
+        manifest_path=manifest_path,
         dry_run=bool(getattr(args, "dry_run", False)),
     )
     if args.report:
@@ -342,6 +345,7 @@ def _delist_verb(
     manifest: list[ManifestCoin],
     repo_root: Path,
     runner: SystemCommandRunner,
+    manifest_path: Path,
 ) -> int:
     """The --delist verb: remove the conf pair(s) of every ticked coin."""
     if not args.ticker:
@@ -356,12 +360,12 @@ def _delist_verb(
     dry_run = bool(getattr(args, "dry_run", False))
     plan: list[dict[str, Any]] = []
     for ticker in sorted(wanted):
-        entries, note = plan_delist_entries(by_ticker[ticker], repo_root)
+        entries, note = plan_delist_entries(by_ticker[ticker], repo_root, manifest_path)
         if note is not None:
             report_line(note)
         plan.extend(entries)
     if not dry_run:
-        apply_entries(plan, repo_root, runner)
+        apply_entries(plan, repo_root, runner, manifest_path=manifest_path)
         for e in plan:
             if not e.get("applied"):
                 report_line(f"  refused {e.get('coin')}: {e.get('file')} — {e.get('error')}")
@@ -395,7 +399,7 @@ def _audit_phases(  # noqa: PLR0913  # the audit pipeline's inputs, keyword-only
     local = crosscheck_local(manifest_path, full_manifest_for_fleet)
     fleet_maps, fleet_summary = collect_port_matrix(args, full_manifest_for_fleet, repo_root)
     param_results = audit_params(args, manifest, repo_root, fleet_maps, fleet_summary, runner)
-    conf_plan = apply_conf_fixes(args, manifest, param_results, repo_root, runner)
+    conf_plan = apply_conf_fixes(args, manifest, param_results, repo_root, runner, manifest_path=manifest_path)
     # Port occupancy must see the whole fleet even when the run is scoped
     # by --ticker; writes stay scoped to `manifest` (see the callee's doc).
     port_plan = apply_port_fixes(
@@ -405,6 +409,7 @@ def _audit_phases(  # noqa: PLR0913  # the audit pipeline's inputs, keyword-only
         repo_root,
         runner,
         fleet_manifest=full_manifest_for_fleet,
+        manifest_path=manifest_path,
     )
     version_repos = report_repos
     if args.versions_from:
@@ -436,13 +441,13 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0911  # verb d
     probe_service = RemoteProbeService(runner)
 
     if args.scaffold:
-        return _scaffold_verb(args, manifest, repo_root, runner, probe_service)
+        return _scaffold_verb(args, manifest, repo_root, runner, probe_service, manifest_path)
 
     if args.apply_plan:
-        return _apply_plan_verb(args, manifest, repo_root, runner)
+        return _apply_plan_verb(args, manifest, repo_root, runner, manifest_path)
 
     if args.delist:
-        return _delist_verb(args, manifest, repo_root, runner)
+        return _delist_verb(args, manifest, repo_root, runner, manifest_path)
 
     missing_dirs = [d for d in ("wallet-confs", "xbridge-confs") if not (repo_root / d).is_dir()]
     if missing_dirs:

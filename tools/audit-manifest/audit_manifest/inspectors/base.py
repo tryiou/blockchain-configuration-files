@@ -15,6 +15,16 @@ NTIME_SERIALIZED_RE = re.compile(r">>\s*(?:tx\.)?nTime\b")
 NTIME_SERIALIZED_OR_RW_RE = re.compile(r">>\s*(?:tx\.)?nTime\b|READWRITE\([^)]*\bnTime\b")
 
 
+def line_of(text: str, match: re.Match[str]) -> int:
+    """1-based line number where ``match`` starts in ``text``.
+
+    Every source-evidence citation cites file:line; this replaces the
+    ``text[: match.start()].count("\\n") + 1`` idiom the inspectors each
+    spelled out inline.
+    """
+    return text[: match.start()].count("\n") + 1
+
+
 # Recursion ceiling for the C++ expression evaluator.
 _MAX_CEXPR_DEPTH = 5
 
@@ -47,13 +57,11 @@ class CppExpressionEvaluator:
         # handle C++14 digit separators (1'000) and underscores
         m = re.match(r"([A-Za-z_]\w*)\s*(?:(/|\*)\s*([\d'_]+))?$", rhs)
         m_rev = None
-        if not m:
+        if m is None:
             # reversed form: `100'000'000 * SATOSHI` (BCH Amount class)
             m_rev = re.match(r"([\d'_]+)\s*(/|\*)\s*([A-Za-z_]\w*)$", rhs)
-            if not m_rev:
+            if m_rev is None:
                 return None, None
-
-        if m_rev:
             num_raw, op, ident = m_rev.group(1), m_rev.group(2), m_rev.group(3)
             num = num_raw.replace("'", "").replace("_", "")
         else:

@@ -121,14 +121,17 @@ def _floor_round(policy: FeePolicy, rate: int, size: int) -> int:
     return fl
 
 
-def _go_floor_round(_policy: FeePolicy, rate: int, size: int) -> int:
-    fl = (size * rate) // 1000
-    if fl == 0 and size != 0 and rate > 0:
-        fl = rate
-    return fl
+def _floor_full_rate_round(_policy: FeePolicy, rate: int, size: int) -> int:
+    """The go_floor and literal_flat shapes: truncating floor whose zero
+    guard is always the full rate.
 
-
-def _literal_flat_round(_policy: FeePolicy, rate: int, size: int) -> int:
+    Both source idioms emit the whole minRelayTxFee when the truncated
+    product is zero (btcd calcMinRequiredTxRelayFee; old-stack literal
+    relay), and their detectors always set zero_guard="full_rate"
+    (inspectors/btcd.py, inspectors/cpp.py). The guard is intrinsic
+    here rather than read from the policy: a policy assembled without
+    it must not silently drop the floor to one satoshi.
+    """
     fl = rate * size // 1000
     if fl == 0 and size != 0 and rate > 0:
         fl = rate
@@ -158,12 +161,14 @@ def _fixed_steps_round(policy: FeePolicy, _rate: int, size: int) -> int:
     return (1 + size // policy.fixed_step_bytes) * policy.fixed_step_fee
 
 
-# One exact handler per rounding shape. An unhandled shape raises in
-# chain_floor rather than defaulting: a wrong floor is a fund-loss risk.
+# One exact handler per rounding model; go_floor and literal_flat share a
+# handler because both are the same floor shape with an intrinsic full-rate
+# zero guard. An unhandled model raises in chain_floor rather than
+# defaulting: a wrong floor is a fund-loss risk.
 _ROUNDERS: dict[str, Callable[[FeePolicy, int, int], int]] = {
     "floor": _floor_round,
-    "go_floor": _go_floor_round,
-    "literal_flat": _literal_flat_round,
+    "go_floor": _floor_full_rate_round,
+    "literal_flat": _floor_full_rate_round,
     "ceil": _ceil_round,
     "ceil_step": _ceil_step_round,
     "fixed_steps": _fixed_steps_round,

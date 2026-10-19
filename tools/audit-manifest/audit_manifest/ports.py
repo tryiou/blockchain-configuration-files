@@ -92,7 +92,7 @@ class PortCollisionManager:
         key: str,
         new_val: int,
         repo_root: Path | None = None,
-    ) -> tuple:
+    ) -> tuple[list[dict[str, Any]], str | None]:
         try:
             txt = SourceReader.slurp(wpath)
             if txt is None:
@@ -122,7 +122,7 @@ class PortCollisionManager:
         xpath: Path,
         new_val: int,
         repo_root: Path | None = None,
-    ) -> tuple:
+    ) -> tuple[list[dict[str, Any]], str | None]:
         try:
             txt = SourceReader.slurp(xpath)
             if txt is None:

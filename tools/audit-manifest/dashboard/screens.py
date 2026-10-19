@@ -41,6 +41,7 @@ from .model import (
     action_for,
     age_text,
     build_coin_rows,
+    cross_check_counts,
     dict_list,
     filter_plan_to_scope,
     last_run_line,
@@ -406,7 +407,9 @@ class WorkspaceScreen(Screen):
         """
         try:
             narrow = self.app.screen.size.width <= self.NARROW_COLS
-        except Exception:
+        except (NoMatches, ScreenStackError):
+            # Screen/size are only readable once the app has mounted a
+            # screen; before that there is nothing to hide yet.
             return
         if narrow:
             self.query_one("#detail-scroll", VerticalScroll).display = False
@@ -470,7 +473,8 @@ class WorkspaceScreen(Screen):
     def _flex_plan(self) -> None:
         try:
             table = self.query_one("#plan-table", DataTable)
-        except Exception:
+        except (NoMatches, ScreenStackError):
+            # The plan table only exists between mount and teardown.
             return
         try:
             keys = list(table.columns.keys())
@@ -665,18 +669,7 @@ class WorkspaceScreen(Screen):
             cross, _mtime, cross_meta = self.extras["cross-check.json"]
             local = cross.get("local")
             if isinstance(local, dict):
-                missing = sum(
-                    len(entries)
-                    for key in ("missing_wallet_conf", "missing_xbridge_conf", "missing_base_j2")
-                    for entries in [local.get(key)]
-                    if isinstance(entries, list)
-                )
-                orphans = local.get("orphans")
-                orphaned = (
-                    sum(len(entries) for entries in orphans.values() if isinstance(entries, list))
-                    if isinstance(orphans, dict)
-                    else 0
-                )
+                missing, orphaned = cross_check_counts(local)
                 if missing or orphaned:
                     lines.append(
                         f"  cross-check.json missing {missing} · orphans {orphaned} "

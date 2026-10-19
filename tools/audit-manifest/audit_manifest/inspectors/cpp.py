@@ -35,6 +35,7 @@ from .base import (
     NTIME_SERIALIZED_OR_RW_RE,
     NTIME_SERIALIZED_RE,
     CppExpressionEvaluator,
+    line_of,
 )
 
 # Process-wide cache for CURRENT_CHAIN detection keyed by the checkout
@@ -135,7 +136,7 @@ def regex_in_block(text: str, start: int, end: int, pattern: str) -> tuple[re.Ma
     m = re.search(pattern, sub)
     if not m:
         return None, None
-    ln = text[:start].count("\n") + sub[: m.start()].count("\n") + 1
+    ln = text[:start].count("\n") + line_of(sub, m)
     return m, ln
 
 
@@ -196,7 +197,7 @@ class PrefixMixin:
                         mm = re.search(chain_pat, text)
                         if mm:
                             try:
-                                return int(mm.group(1)), text[: mm.start()].count(chr(10)) + 1
+                                return int(mm.group(1)), line_of(text, mm)
                             except ValueError:
                                 pass
                     # Fallback: when chain is None, emit UNRESOLVED instead of first-match guess
@@ -212,27 +213,27 @@ class PrefixMixin:
     ) -> tuple[int | None, str]:
         found: dict[int, str] = {}
         for rel in ("src/key_io.cpp", "src/base58.cpp"):
-            txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            txt = SourceReader.read_src(src_dir, rel)
             if txt is None:
                 continue
             m = re.search(r"operator\(\)\(\s*const\s+(?:CScriptID|ScriptHash)\b", txt)
             if not m:
                 continue
             win = txt[m.start() : m.start() + 500]
-            ln = txt[: m.start()].count("\n") + 1
+            ln = line_of(txt, m)
             if re.search(r"Base58Prefix\(CChainParams::SCRIPT_ADDRESS2\)", win):
                 found[sa2] = f"{rel}:{ln} encodes SCRIPT_ADDRESS2"
             if re.search(r"Base58Prefix\(CChainParams::SCRIPT_ADDRESS\)", win):
                 found[sa] = f"{rel}:{ln} encodes SCRIPT_ADDRESS"
 
         for rel in ("src/base58.h", "src/base58.cpp"):
-            txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            txt = SourceReader.read_src(src_dir, rel)
             if txt is None:
                 continue
             if "CBitcoinAddress" in txt and "SCRIPT_ADDRESS2" in txt:
                 m = re.search(r"CBitcoinAddress\s*\(\s*const\s+CScriptID[^)]*SCRIPT_ADDRESS2", txt)
                 if m or re.search(r"Set\s*\(.*SCRIPT_ADDRESS2", txt):
-                    ln = txt[: m.start()].count("\n") + 1 if m else txt[: txt.find("SCRIPT_ADDRESS2")].count("\n") + 1
+                    ln = line_of(txt, m) if m else txt[: txt.find("SCRIPT_ADDRESS2")].count("\n") + 1
                     found[sa2] = f"{rel}:{ln} CBitcoinAddress defaults to SCRIPT_ADDRESS2"
             if (
                 "CBitcoinAddress" in txt
@@ -256,7 +257,7 @@ class PrefixMixin:
         txt = None
         used_rel = "src/chainparams.cpp"
         for rel in ("src/chainparams.cpp", "src/kernel/chainparams.cpp"):
-            cand = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            cand = SourceReader.read_src(src_dir, rel)
             if cand and "base58Prefixes" in cand:
                 txt = cand
                 used_rel = rel
@@ -338,7 +339,7 @@ class PortMixin:
         repo_root: Path,
     ) -> tuple[ParamStatus, str]:
         for rel in ("src/chainparams.cpp", "src/kernel/chainparams.cpp"):
-            txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            txt = SourceReader.read_src(src_dir, rel)
             if txt is None:
                 continue
             start, end = mainnet_slice(txt, want_test=want_test)
@@ -360,7 +361,7 @@ class PortMixin:
                         # Fallback whole-file search for spec table (outside slice)
                         m2 = re.search(rf'spec\.nDefaultPort\["{re.escape(chain)}"\]\s*=\s*(\d+)', txt)
                         if m2:
-                            m, ln = m2, txt[: m2.start()].count(chr(10)) + 1
+                            m, ln = m2, line_of(txt, m2)
                         else:
                             m2, ln2 = regex_in_block(txt, start, end, r'spec\.nDefaultPort\["[^"]+"\]\s*=\s*(\d+)')
                             if m2 is not None:
@@ -368,11 +369,11 @@ class PortMixin:
                             else:
                                 m2 = re.search(r'spec\.nDefaultPort\["[^"]+"\]\s*=\s*(\d+)', txt)
                                 if m2:
-                                    m, ln = m2, txt[: m2.start()].count(chr(10)) + 1
+                                    m, ln = m2, line_of(txt, m2)
                 else:
                     m2 = re.search(r'spec\.nDefaultPort\["[^"]+"\]\s*=\s*(\d+)', txt)
                     if m2:
-                        m, ln = m2, txt[: m2.start()].count(chr(10)) + 1
+                        m, ln = m2, line_of(txt, m2)
             # Also handle indirection: nDefaultPort = spec.nDefaultPort[CURRENT_CHAIN]
             if m is None and re.search(
                 r"nDefaultPort\s*=\s*spec\.nDefaultPort\[",
@@ -382,7 +383,7 @@ class PortMixin:
                 if chain:
                     m2 = re.search(rf'spec\.nDefaultPort\["{re.escape(chain)}"\]\s*=\s*(\d+)', txt)
                     if m2:
-                        m, ln = m2, txt[: m2.start()].count(chr(10)) + 1
+                        m, ln = m2, line_of(txt, m2)
             if m is not None:
                 want = int(m.group(1))
                 try:
@@ -415,20 +416,18 @@ class PortMixin:
         want_test: bool,
         repo_root: Path,
     ) -> tuple[ParamStatus, str]:
-        txt = SourceReader.slurp_src(src_dir, "src/chainparamsbase.cpp") or SourceReader.slurp(
-            src_dir / "src/chainparamsbase.cpp"
-        )
+        txt = SourceReader.read_src(src_dir, "src/chainparamsbase.cpp")
         if txt is None:
             return ParamStatus.UNRESOLVED, "layout differs (no chainparamsbase.cpp) — wrapper-aware search exhausted"
         ev = "chainparamsbase.cpp"
         if want_test:
-            allv = [(mm, txt[: mm.start()].count("\n") + 1) for mm in re.finditer(r"nRPCPort\s*=\s*(\d+)", txt)]
+            allv = [(mm, line_of(txt, mm)) for mm in re.finditer(r"nRPCPort\s*=\s*(\d+)", txt)]
             tm = re.search(r'CBaseChainParams[^"]*"[^"]*",\s*(\d+)', txt)
             if len(allv) >= 2:  # noqa: PLR2004  # testnet RPC arity: the second definition is the test value
                 m, ln = allv[1]
                 want, where = int(m.group(1)), f"{ev}:{ln}"
             elif tm:
-                want, where = int(tm.group(1)), f"{ev}:{txt[: tm.start()].count(chr(10)) + 1} (test branch)"
+                want, where = int(tm.group(1)), f"{ev}:{line_of(txt, tm)} (test branch)"
             else:
                 return ParamStatus.UNRESOLVED, "testnet RPC port not located"
         else:
@@ -438,10 +437,10 @@ class PortMixin:
                 if tm is None:
                     return ParamStatus.UNRESOLVED, "nRPCPort not found in chainparamsbase.cpp"
                 want = int(tm.group(1))
-                where = f"{ev}:{txt[: tm.start()].count(chr(10)) + 1}"
+                where = f"{ev}:{line_of(txt, tm)}"
             else:
                 want = int(mm.group(1))
-                where = f"{ev}:{txt[: mm.start()].count(chr(10)) + 1}"
+                where = f"{ev}:{line_of(txt, mm)}"
 
         try:
             got = int(wc.get("rpcport", ""))
@@ -509,12 +508,10 @@ def _block_inclusion_rate(src_dir: Path) -> tuple[int | None, str | None]:  # no
                 # Same convention as the relay path (SATOSHI=1 sat).
                 braw = braw.replace("SATOSHI", "1")
                 cand, ev = CppExpressionEvaluator.resolve_cexpr(
-                    braw, btxt, f"{name}:{btxt[: bm.start()].count(chr(10)) + 1} (SATOSHI=1)", src_dir
+                    braw, btxt, f"{name}:{line_of(btxt, bm)} (SATOSHI=1)", src_dir
                 )
             else:
-                cand, ev = CppExpressionEvaluator.resolve_cexpr(
-                    braw, btxt, f"{name}:{btxt[: bm.start()].count(chr(10)) + 1}", src_dir
-                )
+                cand, ev = CppExpressionEvaluator.resolve_cexpr(braw, btxt, f"{name}:{line_of(btxt, bm)}", src_dir)
             if cand is not None:
                 return cand, ev
     return None, None
@@ -550,7 +547,7 @@ def _dust_relay_rate(src_dir: Path) -> tuple[int | None, str | None]:
                 cand, ev = CppExpressionEvaluator.resolve_cexpr(
                     raw,
                     txt,
-                    f"{name}:{txt[: m.start()].count(chr(10)) + 1}",
+                    f"{name}:{line_of(txt, m)}",
                     src_dir,
                 )
                 if cand is not None:
@@ -558,7 +555,7 @@ def _dust_relay_rate(src_dir: Path) -> tuple[int | None, str | None]:
                 try:
                     mm = re.search(r"(\d+)", raw)
                     if mm:
-                        return int(mm.group(1)), f"{name}:{txt[: m.start()].count(chr(10)) + 1}"
+                        return int(mm.group(1)), f"{name}:{line_of(txt, m)}"
                 except (ValueError, TypeError) as e:
                     logger.debug("dust marker %s not parseable: %s", name, e)
                     continue
@@ -639,14 +636,12 @@ class FeeMixin:
                                 ) // int(b.strip())
                             else:
                                 rate = eval_cnum(expr_sub)
-                            rate_ev = f"{name}:{txt[: m.start()].count(chr(10)) + 1} (SATOSHI=1)"
+                            rate_ev = f"{name}:{line_of(txt, m)} (SATOSHI=1)"
                             break
                         except (ValueError, TypeError) as e:
                             # Not a plain SATOSHI=1 literal — fall through to the expression evaluator.
                             logger.debug("fee marker %s not a plain literal: %s", name, e)
-                    cand, ev = CppExpressionEvaluator.resolve_cexpr(
-                        raw_expr, txt, f"{name}:{txt[: m.start()].count(chr(10)) + 1}", src_dir
-                    )
+                    cand, ev = CppExpressionEvaluator.resolve_cexpr(raw_expr, txt, f"{name}:{line_of(txt, m)}", src_dir)
                     if cand is not None:
                         rate, rate_ev = cand, ev
                         break
@@ -697,7 +692,7 @@ class FeeMixin:
                         )
                     else:
                         rate = eval_cnum(expr_sub)
-                    rate_ev = f"{cpp}:{txt[: m.start()].count(chr(10)) + 1} CFeeRate literal {expr}"
+                    rate_ev = f"{cpp}:{line_of(txt, m)} CFeeRate literal {expr}"
                 except (ValueError, TypeError) as e:
                     logger.debug("CFeeRate literal %s not parseable: %s", expr, e)
                     continue
@@ -897,7 +892,7 @@ def coin_value_from_amount_h(txt: str, rel: str, src_dir: Path) -> tuple[int | N
     if m is None:
         return None, None
     rhs = m.group(1)
-    ln = clean[: m.start()].count(chr(10)) + 1
+    ln = line_of(clean, m)
     v, ev = CppExpressionEvaluator.resolve_cexpr(rhs, clean, f"{rel}:{ln}", src_dir)
     if v is None:
         return None, None
@@ -966,10 +961,10 @@ def _txtime_line(txt: str, member: re.Match[str] | None) -> int | None:
     if g is not None:
         return g + 1
     if member is not None:
-        return txt[: member.start()].count("\n") + 1
+        return line_of(txt, member)
     m_struct = re.search(r"(?:struct|class)\s+CTransaction\b", txt)
     if m_struct is not None:
-        return txt[: m_struct.start()].count("\n") + 1
+        return line_of(txt, m_struct)
     return None
 
 
@@ -991,7 +986,7 @@ class TxWireMixin:
         # wrapper divi/src/amount.h handled by slurp_src BFS. Try in order.
         # COIN resolution ignores commented-out definitions (helper).
         for rel in ("src/amount.h", "src/consensus/amount.h"):
-            txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            txt = SourceReader.read_src(src_dir, rel)
             if txt is None:
                 continue
             src_n, ev = coin_value_from_amount_h(txt, rel, src_dir)
@@ -1009,9 +1004,7 @@ class TxWireMixin:
     def check_txversion(  # noqa: C901, PLR0911, PLR0912, PLR0915  # pattern-matcher: one branch per known source marker
         cls, coin: ManifestCoin, src_dir: Path, xc: dict[str, str]
     ) -> tuple[ParamStatus, str]:
-        txt = SourceReader.slurp_src(src_dir, "src/primitives/transaction.h") or SourceReader.slurp(
-            src_dir / "src/primitives/transaction.h"
-        )
+        txt = SourceReader.read_src(src_dir, "src/primitives/transaction.h")
         if txt is None:
             return ParamStatus.UNRESOLVED, "layout differs — src/primitives/transaction.h not found"
 
@@ -1030,7 +1023,7 @@ class TxWireMixin:
                 m_val = re.search(r"\b" + re.escape(m_enum.group(1)) + r"\s*=\s*(-?\d+)", txt)
                 if m_val:
                     cur = int(m_val.group(1))
-                    cur_enum_ev = f"{txh}:{txt[: m_val.start()].count(chr(10)) + 1} TxVersion::{m_enum.group(1)}={cur}"
+                    cur_enum_ev = f"{txh}:{line_of(txt, m_val)} TxVersion::{m_enum.group(1)}={cur}"
                 else:
                     cur = None
             else:
@@ -1065,7 +1058,7 @@ class TxWireMixin:
             return ParamStatus.FAIL, "TxVersion non-numeric"
 
         ext_note = f" (extended range max {max(extra)})" if extra else ""
-        cur_ln = txt[: m_cur.start()].count(chr(10)) + 1 if m_cur else None
+        cur_ln = line_of(txt, m_cur) if m_cur else None
         bound_ev = f"{txh}:{cur_ln}" if cur_ln else txh
         if cur_enum_ev and not cur_ln:
             bound_ev = cur_enum_ev
@@ -1081,9 +1074,7 @@ class TxWireMixin:
     def check_txtime(  # verdict table: one return per verdict kind
         cls, coin: ManifestCoin, src_dir: Path, xc: dict[str, str]
     ) -> tuple[ParamStatus, str]:
-        raw = SourceReader.slurp_src(src_dir, "src/primitives/transaction.h") or SourceReader.slurp(
-            src_dir / "src/primitives/transaction.h"
-        )
+        raw = SourceReader.read_src(src_dir, "src/primitives/transaction.h")
         if raw is None:
             return ParamStatus.UNRESOLVED, "layout differs — src/primitives/transaction.h not found"
 
@@ -1159,7 +1150,7 @@ def _compute_current_chain(src_dir: Path) -> str | None:  # noqa: C901, PLR0912
     """
     # Primary: NAME in autogen.sh is the chain name
     for rel in ("autogen.sh", "src/Makefile.am", "Makefile.am", "configure.ac", "src/Makefile.in", "Makefile.in"):
-        t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        t = SourceReader.read_src(src_dir, rel)
         if not t:
             continue
         # Simple NAME search - filter out BITCOIN_DAEMON_NAME etc by ignoring
@@ -1186,7 +1177,7 @@ def _compute_current_chain(src_dir: Path) -> str | None:  # noqa: C901, PLR0912
                 return mn2.group(1).lower()
     # Fallback: inspect chainparams spec keys - generic frequency based
     for rel in ("src/kernel/chainparams.cpp", "src/chainparams.cpp"):
-        t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        t = SourceReader.read_src(src_dir, rel)
         if t:
             keys = re.findall(r'spec\.\w+\["(\w+)"\]', t)
             if keys:
@@ -1363,7 +1354,7 @@ class ChainTimingMixin:
         """FIRO-like MTP halving: GetTargetBlocksSpacing returns MTP/2 after stage3."""
         # 3) FIRO-like MTP halving: look for GetTargetBlocksSpacing returning MTP/2
         for rel in ("src/pow.cpp", "src/primitives/block.cpp", "src/consensus/params.cpp"):
-            t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            t = SourceReader.read_src(src_dir, rel)
             if t and "GetTargetBlocksSpacing" in t and "nPowTargetSpacingMTP" in t:
                 # Find MTP spacing
                 for cand in (t, main_txt):
@@ -1391,7 +1382,7 @@ class ChainTimingMixin:
         """UNO-like KGW: pow.cpp BlocksTargetSpacing after the fork block."""
         # 4) UNO-like KGW: pow.cpp BlocksTargetSpacing = 3*60 after fork
         for rel in ("src/pow.cpp", "src/pow.h", "src/consensus/pow.cpp"):
-            t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            t = SourceReader.read_src(src_dir, rel)
             if t and "BlocksTargetSpacing" in t:
                 m_bts, ln_bts = regex_in_block(t, 0, len(t), r"BlocksTargetSpacing\s*=\s*([^;\n;]+)")
                 if m_bts:
@@ -1461,7 +1452,7 @@ class ChainTimingMixin:
             "src/kernel/chainparams.cpp",
             "src/primitives/block.cpp",
         ):
-            txt_cand = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            txt_cand = SourceReader.read_src(src_dir, rel)
             if txt_cand:
                 files_to_scan.append((txt_cand, rel))
         return files_to_scan
@@ -1553,7 +1544,7 @@ class ChainTimingMixin:
         txt = None
         used_rel = "src/chainparams.cpp"
         for rel in ("src/chainparams.cpp", "src/kernel/chainparams.cpp"):
-            cand = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            cand = SourceReader.read_src(src_dir, rel)
             if cand:
                 if txt is None:
                     txt = cand
@@ -1633,35 +1624,35 @@ def _txindex_default(src_dir: Path) -> tuple[bool | None, str | None]:
     wrapper (divi) handled via slurp_src
     """
     for rel in _TXINDEX_HEADERS:
-        txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        txt = SourceReader.read_src(src_dir, rel)
         if txt is None:
             continue
         m = re.search(r"DEFAULT_TXINDEX\s*(?:=\s*(true|false)|\{\s*(true|false)\s*\})", txt)
         if m:
             val = m.group(1) or m.group(2)
-            return val == "true", f"{rel}:{txt[: m.start()].count(chr(10)) + 1}"
+            return val == "true", f"{rel}:{line_of(txt, m)}"
     # Fallback: legacy forks without DEFAULT_TXINDEX constant - detect via fTxIndex init or GetBoolArg default
     for rel in _TXINDEX_FALLBACKS:
-        txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        txt = SourceReader.read_src(src_dir, rel)
         if txt is None:
             continue
         m = re.search(r"bool\s+fTxIndex\s*=\s*(true|false)", txt)
         if m:
-            return m.group(1) == "true", f"{rel}:{txt[: m.start()].count(chr(10)) + 1} fTxIndex"
+            return m.group(1) == "true", f"{rel}:{line_of(txt, m)} fTxIndex"
         m2 = re.search(r'GetBoolArg\s*\(\s*["\']-txindex["\']\s*,\s*(true|false)', txt)
         if m2:
-            return m2.group(1) == "true", f"{rel}:{txt[: m2.start()].count(chr(10)) + 1} GetBoolArg-txindex"
+            return m2.group(1) == "true", f"{rel}:{line_of(txt, m2)} GetBoolArg-txindex"
     return None, None
 
 
 def _txindex_registered(src_dir: Path) -> bool:
     """True when -txindex is registered upstream (modern or legacy help style)."""
     for rel in _TXINDEX_REGISTERED:
-        t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        t = SourceReader.read_src(src_dir, rel)
         if t and ('"-txindex"' in t or "'-txindex'" in t):
             return True
     for rel in _TXINDEX_LEGACY_HELP:
-        t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+        t = SourceReader.read_src(src_dir, rel)
         if t and "-txindex" in t:
             return True
     return False
@@ -1713,7 +1704,7 @@ class WalletFlagMixin:
         if not keys:
             return ParamStatus.SKIP, "not used"
         for rel in ("src/init.cpp", "src/wallet/init.cpp", "src/wallet/wallet.h"):
-            t = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+            t = SourceReader.read_src(src_dir, rel)
             if not t:
                 continue
             for flag in ('"-addresstype"', '"-changetype"'):
@@ -1760,7 +1751,7 @@ class WalletFlagMixin:
             gate_found = False
             gate_ev = ""
             for rel in files_to_check:
-                txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+                txt = SourceReader.read_src(src_dir, rel)
                 if txt is None:
                     continue
                 if f'IsDeprecatedRPCEnabled("{val}")' in txt or f"IsDeprecatedRPCEnabled('{val}')" in txt:
@@ -1771,7 +1762,7 @@ class WalletFlagMixin:
                 if "IsDeprecatedRPCEnabled" in txt and val in txt:
                     for m in re.finditer(r"IsDeprecatedRPCEnabled\s*\(\s*[\"']" + re.escape(val) + r"[\"']\s*\)", txt):
                         gate_found = True
-                        gate_ev = f'{rel}:{txt[: m.start()].count(chr(10)) + 1} IsDeprecatedRPCEnabled("{val}")'
+                        gate_ev = f'{rel}:{line_of(txt, m)} IsDeprecatedRPCEnabled("{val}")'
                         break
                     if gate_found:
                         break
@@ -1779,7 +1770,7 @@ class WalletFlagMixin:
             method_exists = False
             method_ev = ""
             for rel in files_to_check:
-                txt = SourceReader.slurp_src(src_dir, rel) or SourceReader.slurp(src_dir / rel)
+                txt = SourceReader.read_src(src_dir, rel)
                 if txt is None:
                     continue
                 if f'"{val}"' in txt or f"'{val}'" in txt:
