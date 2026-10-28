@@ -359,6 +359,7 @@ def test_scaffold_write_stage_emits_event(tmp_path, capsys, monkeypatch):
             "ScriptPrefix": (0, "fixture"),
             "SecretPrefix": (0, "fixture"),
             "relay_rate": (100000, "fixture"),
+            "dust_amount": (546, "fixture"),
             "fee_policy": FeePolicy(rounding="floor", mempool="flat"),
         }
 

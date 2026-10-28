@@ -154,7 +154,7 @@ SecretPrefix=                   # Decoded private key, Base58 > HEX(0,2) > decim
 COIN=                           # Coin precision defined in source code COIN =;
 MinimumAmount=0                 # Minimum exchange amount, leave value set to '0';
 TxVersion=                      # The `version` value found in raw transactions;
-DustAmount=0                    # Leave value set to '0';
+DustAmount=                     # Coin's own dust threshold in base units (source-derived; see below);
 CreateTxMethod=                 # Type of transaction method: BTC, SYS, DGB, etc;
 GetNewKeySupported=true         # Leave value set to 'true';
 ImportWithNoScanSupported=true  # Leave value set to 'true';
@@ -180,7 +180,7 @@ SecretPrefix=154
 COIN=100000000
 MinimumAmount=0
 TxVersion=1
-DustAmount=0
+DustAmount=546
 CreateTxMethod=BTC
 GetNewKeySupported=true
 ImportWithNoScanSupported=true
@@ -248,7 +248,7 @@ In the following explanation, Blocknet wallet [v4.3.0](https://github.com/Blockn
         "SecretPrefix": "154",
         "COIN": "100000000",
         "MinimumAmount": "0",
-        "DustAmount": "0",
+        "DustAmount": "546",
         "CreateTxMethod": "BTC",
         "GetNewKeySupported": "true",
         "ImportWithNoScanSupported": "true",
@@ -321,8 +321,8 @@ Directive                                | Comment
 "SecretPrefix": "154",                   | The secret prefix follows the same process as the address prefix also, but with a private key instead of a public address. Follow these steps to obtain the private key and prefix: <br>1) Open the wallet's debug console; <br>2) Type `dumpprivkey <pub address>`, replacing `<pub address>` with a public address, and press *Enter*; <br>3) Copy the console output, which is the private key; <br>4) Perform the steps provided for *AddressPrefix* using this private key;
 "COIN": "100000000",                     | Coin precision determined in source code. `COIN=100000000` = `1.00000000` & `COIN=1000000` = `1.000000`
 "MinimumAmount": "0",                    | This is the minimum exchange amount. Keep this value set to `0`.
+"DustAmount": "546",                     | The coin's dust threshold, in the coin's own base units. It is the effective P2PKH threshold the daemon enforces — the value below which an output is refused as dust — derived from the coin's own source at the version it ships (`182 * dustRelayFee / 1000`, times 3 where the coin applies the legacy 3x formula, or the coin's literal limit / consensus minimum output when it uses one). A coin whose source disables dust carries `0`, which means "no dust gate" and is the only case where `0` is correct. Never hand-write this value: the audit tool derives, validates and writes it with the source citation (`--dust-write`). A conf missing the key is a configuration error and the coin is not activated.
 "TxVersion": "1",                        | The transaction version is the value of `"version"` in raw transactions. There are two ways this value can be found. <br>**Method 1**:<br>1) Check if the blockchain explorer has raw transaction JSON in the transaction detail pages. For Blocknet, this can be found in [the explorer *Raw Transaction* tab](https://chainz.cryptoid.info/block/tx.dws?274413.htm). <br>2) In the JSON, the version can be found as the second key-value pair: `"version": 1`. <br>**Method 2**<br>1) Alternatively, the transaction version number can be found using a wallet's debug console. <br>2) Open the wallet's debug console; <br>• Type `getrawtransaction <tx id>`, replacing `<tx id>` with a transaction ID(hash): *060f838a8df0e089350834c1ef541418f2f9e1bca952bdcc0f4dbe64af2188c6*; <br>3) Copy the console output, which is a HEX string that needs to be decoded; <br>4) In the console type `decoderawtransaction <hex string>`, replacing `<hex string>` with the outputted HEX string; <br>5) In the JSON output, the version can be found as the second key-value pair: `"version": 1`.
-"DustAmount": "0",                       | This specifies the dust amount threshold. Keep this value set to `0`.
 "CreateTxMethod": "BTC",                 | The transaction method refers to the type of transaction procedure that is used for the blockchain. The different types can be found by looking at the variations of `xbridgewalletconnector` files in the [Blocknet Github](https://github.com/BlocknetDX/BlockDX/tree/master/src/xbridge), such as `BTC`, `DGB`, or `SYS`. *Example:* `xbridgewalletconnectordgb.cpp`;
 "GetNewKeySupported": "true",            | Keep this value set to `true`.
 "ImportWithNoScanSupported": "true",     | Keep this value set to `true`.

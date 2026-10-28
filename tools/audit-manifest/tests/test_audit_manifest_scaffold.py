@@ -301,6 +301,7 @@ def _scaffold_params():
         "ScriptPrefix": (5, "src/chainparams.cpp:5"),
         "SecretPrefix": (128, "src/chainparams.cpp:6"),
         "relay_rate": (1000, "src/validation.h:1"),
+        "dust_amount": (546, "src/policy/policy.h:1 -> P2PKH 546 sat"),
         "fee_policy": FeePolicy(rounding="floor", mempool="flat"),
         "_family": "btc",
     }
@@ -349,6 +350,32 @@ def test_scaffold_apply_writes_coin_through_applier(tmp_path, monkeypatch):
     assert (tmp_path / "wallet-confs" / "new--v1.0.0.conf").is_file()
     assert (tmp_path / "xbridge-confs" / "new--v1.0.0.conf").is_file()
     assert [e["ticker"] for e in _json.loads((tmp_path / "manifest-latest.json").read_text())] == ["NEW"]
+    staged = (tmp_path / "xbridge-confs" / "new--v1.0.0.conf").read_text()
+    assert "DustAmount=546" in staged, "the scaffold must emit the source-derived dust threshold, never a placeholder"
+
+
+def test_scaffold_refuses_without_a_dust_source(tmp_path, monkeypatch):
+    """A coin whose dust gate cannot be proved must not produce a conf."""
+    from unittest import mock as _mock
+
+    from audit_manifest.checkout import SourceCheckoutManager
+    from audit_manifest.scaffold import CoinScaffolder
+
+    (tmp_path / "manifest-latest.json").write_text(__import__("json").dumps([]))
+    (tmp_path / "wallet-confs").mkdir()
+    (tmp_path / "xbridge-confs").mkdir()
+    src = tmp_path / "src-tree"
+    src.mkdir()
+    monkeypatch.setattr(SourceCheckoutManager, "resolve_for", lambda self, ticker, url, tag, timeout: (src, "cloned"))
+    params = _scaffold_params()
+    params.pop("dust_amount")
+    with _mock.patch.object(CoinScaffolder, "extract_scaffold_params", return_value=params):
+        rc, result = CoinScaffolder().run(_scaffold_args(tmp_path, apply=True), [], tmp_path)
+    assert rc == 1
+    assert "dust source unresolvable" in result["error"]
+    assert not (tmp_path / "xbridge-confs" / "new--v1.0.0.conf").exists(), (
+        "no conf may be written for a coin whose dust threshold is unprovable"
+    )
 
 
 def test_scaffold_apply_is_all_or_nothing_on_half_exists(tmp_path):

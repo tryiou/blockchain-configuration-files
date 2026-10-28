@@ -73,7 +73,8 @@ they report or write is anchored there.
 | Offline subset of the same: local cross-check + fleet port matrix, no probe at all | `--local-only` | No |
 | Fact-check confs against coin source at the exact manifest tag | `--param-check` (`--fees-only`, `--strict-per-version`) | No |
 | Preview any write below — compute it, report it, touch nothing | `--dry-run` | No |
-| Auto-fix missing `txindex`, dust placeholder, stale `deprecatedrpc` | `--write-config` | **Yes** |
+| Auto-fix missing `txindex`, the source-derived `DustAmount`, stale `deprecatedrpc` | `--write-config` | **Yes** |
+| Write only each coin's source-derived `DustAmount` | `--dust-write` | **Yes** |
 | Rewrite `MinTxFee` / `FeePerByte` to the strict chain gates | `--fee-write` | **Yes** |
 | Reassign colliding P2P/RPC ports (earliest lineage wins) | `--fix-ports` | **Yes** |
 | Append the latest upstream tag to `manifest-latest.json` + regen `base.j2` | `--update-versions` (`--replace-versions`) | **Yes** |
@@ -104,11 +105,37 @@ plan, collisions stay reported as findings instead of moves. Every port
 write re-verifies fleet freedom at apply time, refusing instead of
 introducing a collision the plan predates.
 
-**The three conf/port write flags imply `--param-check`.** `--write-config`,
-`--fee-write` and `--fix-ports` derive their work from the parameter
-fact-check, which only runs when `--param-check` is on — so passing any of
-them turns it on and prints `NOTE: <flag> implies --param-check; enabling it
-now`. That is deliberate: without it those flags would silently do nothing.
+**`--dust-write` is the dust-only write.** It carries the same
+derive/verify/apply path as `--write-config`'s dust fix, but plans nothing
+else: no `txindex`, no `deprecatedrpc`, and — unlike `--write-config` — no
+port reassignment, because a dust campaign must not silently move the
+fleet's ports. Use it to populate or re-check `DustAmount` across the fleet:
+
+```bash
+python3 tools/audit-manifest/audit-manifest.py \
+    --ticker LTC,DASH,PIVX,BLOCK --local-only --dust-write --dry-run
+```
+
+`DustAmount` is the coin's own effective dust threshold in native base units,
+the only definition the engines use. It is derived from the coin's source at
+the audit entry tag: the P2PKH gate (`182 * dustRelayFee / 1000`, ×3 for the
+legacy multiplier), a coin's literal flat limit where its `IsDust` takes an
+amount, or its consensus minimum output amount — and `0` only when the source
+disables dust entirely. A coin whose gate cannot be located refuses rather
+than guessing.
+
+A dust write is verified, not assumed: after the conf is written the tool
+regenerates `autobuild/configs/<ticker>.base.j2` and refuses the run (exit 1)
+if the template did not pick up the value, because the next fleet render
+would otherwise silently revert the conf. A failed or timed-out regeneration
+is an error, never a log line.
+
+**The conf/port write flags imply `--param-check`.** `--write-config`,
+`--dust-write`, `--fee-write` and `--fix-ports` derive their work from the
+parameter fact-check, which only runs when `--param-check` is on — so passing
+any of them turns it on and prints `NOTE: <flag> implies --param-check;
+enabling it now`. That is deliberate: without it those flags would silently do
+nothing.
 The fact-check clones coin source, so factor that cost in (batch it with
 `--ticker`, as above). `--update-versions` does not imply anything: it reads
 tags, not confs.

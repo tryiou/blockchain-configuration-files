@@ -19,24 +19,8 @@ from ..constants import (
     XMAX_LOCKTIME_DRIFT_BLOCKS,
 )
 from ..model import CheckerTuple, FeePolicy, ManifestCoin, ParamStatus, chain_floor, max_status, recommended_fees
-
-# Dust-gate inputs: the files that may apply the 3x dust multiplier, the
-# markers that prove it, and the rounding models with a flat per-size gate.
-_DUST_FACTOR_SOURCES = (
-    "src/policy/policy.cpp",
-    "src/primitives/transaction.h",
-    "divi/src/FeeAndPriorityCalculator.cpp",
-    "src/validation.cpp",
-)
-_DUST_FACTOR_MARKERS = (
-    "3 * dustRelayFee",
-    "3*dustRelayFee",
-    "3 * minimumRelay",
-    "3*minimumRelay",
-    "3 * minRelayTxFee",
-    "3*minRelayTxFee",
-)
-_FLAT_DUST_ROUNDINGS = ("floor", "ceil", "go_floor", "literal_flat")
+from ..util import conf_val_ci
+from .dust import DustKind, expectation
 
 
 class CommonParamCheckers:
@@ -173,48 +157,23 @@ class CommonParamCheckers:
             detail += " [note: DGP live values override source default]"
         return ParamStatus.PASS, detail
 
-    # pattern-matcher: one branch per known source marker
     @staticmethod
-    def _dust_factor(src_dir: Path) -> int:
-        """3 when a source file applies the 3x dust multiplier, else 1."""
-        for cand in _DUST_FACTOR_SOURCES:
-            t = SourceReader.read_src(src_dir, cand)
-            if t and any(k in t for k in _DUST_FACTOR_MARKERS):
-                return 3
-        return 1
-
-    @staticmethod
-    def _has_segwit(src_dir: Path) -> bool:
-        """True when policy.cpp proves a witness-aware IsDust."""
-        cand = "src/policy/policy.cpp"
-        t = SourceReader.read_src(src_dir, cand)
-        return bool(t and "WITNESS_SCALE_FACTOR" in t and "IsWitnessProgram" in t)
-
-    @staticmethod
-    def _dust_at_size(dust: int, size: int, factor: int, policy: FeePolicy | None) -> int:
-        """The dust gate at one output size, per the rounding model."""
-        if policy is not None and policy.rounding == "ceil_step":
-            # ceil_step single-arg rates apply as given (the flat
-            # step_rate only comes from the neutralized 2-arg ctor).
-            return dust * ((size + policy.kb_step - 1) // policy.kb_step) * factor
-        if policy is not None and policy.rounding in _FLAT_DUST_ROUNDINGS:
-            # Exact per-model dust gate at typical sizes (P2PKH 182 B).
-            return chain_floor(policy, dust, size) * factor
-        return dust * size // 1000 * factor
-
-    @staticmethod
-    def _dust_disabled_verdict(conf_val: int, policy: FeePolicy) -> CheckerTuple:
-        """Verdict for a source that disables dust entirely (IsDust always false)."""
-        if conf_val == 0:
-            return ParamStatus.INFO, (
-                "placeholder DustAmount=0 correct — source disables dust "
-                f"(IsDust always false) ({'; '.join(policy.evidence)})"
+    def _parse_dust_conf(xc: dict[str, str]) -> tuple[int | None, CheckerTuple | None]:
+        """The conf's DustAmount, or the verdict explaining why it is unusable."""
+        raw = conf_val_ci(xc, "DustAmount").strip()
+        if raw == "":
+            return None, (
+                ParamStatus.FAIL,
+                "DustAmount missing — every conf must declare the coin's dust threshold",
+                "dust",
             )
-        return (
-            ParamStatus.WARN,
-            (f"DustAmount={conf_val} ignored by blocknet loader — source disables dust (IsDust always false)"),
-            "dust",
-        )
+        try:
+            value = int(raw)
+        except ValueError:
+            return None, (ParamStatus.FAIL, f"DustAmount={raw!r} non-numeric", "dust")
+        if value < 0:
+            return None, (ParamStatus.FAIL, f"DustAmount={value} negative", "dust")
+        return value, None
 
     @staticmethod
     def check_dust(  # noqa: PLR0913, PLR0917  # dispatcher: every hand-off is a named helper
@@ -227,56 +186,29 @@ class CommonParamCheckers:
         dust_ev: str | None,
         policy: FeePolicy | None = None,
     ) -> CheckerTuple:
-        raw = xc.get("DustAmount", "")
-        try:
-            conf_val = int(raw.strip()) if raw.strip() != "" else None
-        except ValueError:
-            return ParamStatus.FAIL, f"DustAmount={raw!r} non-numeric"
-        if conf_val is None:
-            return ParamStatus.UNRESOLVED, "DustAmount missing — expected placeholder 0"
+        """Verify the conf's DustAmount against the coin's own dust gate.
 
-        if policy is not None and policy.dust_model == "disabled":
-            return CommonParamCheckers._dust_disabled_verdict(conf_val, policy)
+        DustAmount is the coin's effective threshold in native base units and
+        is the only definition the engines use, so a conf that omits it, or
+        carries anything other than the source-derived value, is a defect —
+        not a placeholder. The expected value comes from the same
+        ``dust.expectation`` the writer uses, so check and fix cannot disagree.
+        """
+        conf_val, refusal = CommonParamCheckers._parse_dust_conf(xc)
+        if refusal is not None:
+            return refusal
 
-        expected = None
-        expected_ev = ""
-        is_static_limit = False
+        expected = expectation(src_dir=src_dir, rate=rate, rate_ev=rate_ev, dust=dust, dust_ev=dust_ev, policy=policy)
+        if expected is None:
+            return ParamStatus.UNRESOLVED, "dust constants not located — refusing to guess a threshold"
 
-        if dust is not None:
-            ticker_up = coin.ticker.upper()
-            if dust_ev and (
-                "DEFAULT_DUST_LIMIT" in dust_ev or ("RECOMMENDED_MIN_TX_FEE" in dust_ev and ticker_up == "DOGE")
-            ):
-                expected = dust
-                expected_ev = f"{dust_ev} -> static dustLimit {dust} sat (IsDust: value < limit)"
-                is_static_limit = True
-            else:
-                factor = CommonParamCheckers._dust_factor(src_dir)
-                p2pkh = CommonParamCheckers._dust_at_size(dust, 182, factor, policy)
-                if CommonParamCheckers._has_segwit(src_dir):
-                    p2wpkh = CommonParamCheckers._dust_at_size(dust, 98, factor, policy)
-                    expected = p2pkh
-                    expected_ev = f"{dust_ev} (dustRelayFee={dust} sat/kB) -> P2PKH {p2pkh} sat, P2WPKH {p2wpkh} sat"
-                else:
-                    expected = p2pkh
-                    expected_ev = f"{dust_ev} (dustRelayFee={dust} sat/kB) -> P2PKH {p2pkh} sat"
-        elif rate is not None:
-            p2pkh = 3 * rate * 182 // 1000
-            expected = p2pkh
-            expected_ev = f"{rate_ev} (relayFee={rate} sat/kB) -> P2PKH {p2pkh} sat (legacy IsDust)"
+        if conf_val == expected.value:
+            return ParamStatus.PASS, (f"DustAmount={conf_val} == source effective threshold ({expected.evidence})")
+        if expected.kind is DustKind.DISABLED:
+            detail = f"DustAmount={conf_val} != 0 — source disables dust ({expected.evidence})"
         else:
-            return ParamStatus.UNRESOLVED, "dust constants not located"
-
-        if conf_val == 0:
-            desc = f"upstream static dustLimit {expected} sat" if is_static_limit else f"expected P2PKH {expected} sat"
-            return ParamStatus.INFO, (
-                f"placeholder DustAmount=0 (expected — blocknet computes runtime dust) — {desc} ({expected_ev})"
-            )
-        return (
-            ParamStatus.WARN,
-            (f"DustAmount={conf_val} ignored by blocknet loader — expected P2PKH {expected} sat ({expected_ev})"),
-            "dust",
-        )
+            detail = f"DustAmount={conf_val} != source effective threshold {expected.value} ({expected.evidence})"
+        return ParamStatus.WARN, detail, "dust"
 
     @staticmethod
     def check_confirmations(coin: ManifestCoin, xc: dict[str, str]) -> tuple[ParamStatus, str]:

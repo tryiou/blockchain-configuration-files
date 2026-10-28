@@ -47,15 +47,40 @@ def snapshot(root):
     }
 
 
-def test_plan_halves_write_nothing(root):
+def test_plan_halves_write_nothing(root, monkeypatch):
     """P0-B: derivation leaves every byte untouched."""
     coin = make_coin()
     before = snapshot(root)
     ConfigAutoFixer.plan_missing_txindex(root, coin)
-    ConfigAutoFixer.plan_normalize_dust(root, coin)
+    _stub_dust_source(monkeypatch, root, "1234")
+    ConfigAutoFixer.plan_configure_dust(root, coin)
     ConfigAutoFixer.plan_remove_deprecatedrpc(root, coin)
     PortCollisionManager.plan_wallet_key(root / "wallet-confs" / "aaa--v1.0.conf", "rpcport", 8888, repo_root=root)
     assert snapshot(root) == before
+
+
+def _stub_dust_source(monkeypatch, root, value: str):
+    """Point the dust planner at the tmp repo and pin its computed value.
+
+    The planner resolves the coin's source checkout and reads the coin's own
+    dust gate; both are external to a plan unit test, so the resolve is stubbed
+    to the tmp root and the expectation to a fixed source-derived value.
+    """
+    from audit_manifest import fixes
+    from audit_manifest.inspectors.dust import DustExpectation, DustKind
+
+    monkeypatch.setattr(
+        fixes.ConfigAutoFixer,
+        "_resolve_source_for_fix",
+        staticmethod(lambda coin, label: root),
+    )
+    monkeypatch.setattr(
+        fixes,
+        "expectation",
+        lambda **_kw: DustExpectation(int(value), "src/policy/policy.h:1", DustKind.P2PKH),
+    )
+    monkeypatch.setattr(fixes, "fee_constants_for_coin", lambda coin, src: (1000, "ev", 3000, "dev"))
+    monkeypatch.setattr(fixes, "fee_policy_for_coin", lambda coin, src: None)
 
 
 def test_applier_appends_txindex_and_refuses_when_present(root):
@@ -70,16 +95,17 @@ def test_applier_appends_txindex_and_refuses_when_present(root):
     assert out[0]["applied"] is False
 
 
-def test_applier_dust_replace_and_stale_refuse(root):
+def test_applier_dust_replace_and_stale_refuse(root, monkeypatch):
     """P0-B: dust rewrites the reviewed value, refuses a moved one."""
     coin = make_coin()
-    entries, _ = ConfigAutoFixer.plan_normalize_dust(root, coin)
+    _stub_dust_source(monkeypatch, root, "5460")
+    entries, _ = ConfigAutoFixer.plan_configure_dust(root, coin)
     entry = entries[0]
     assert entry["old"] == "100"
-    out = apply_entries([entry], root)
+    out = apply_entries([entry], root, regenerate=False)
     assert out[0]["applied"] is True
-    assert "DustAmount=0" in (root / "xbridge-confs" / "aaa--v1.0.conf").read_text()
-    out = apply_entries([entry], root)
+    assert "DustAmount=5460" in (root / "xbridge-confs" / "aaa--v1.0.conf").read_text()
+    out = apply_entries([entry], root, regenerate=False)
     assert out[0]["applied"] is False
 
 
@@ -399,22 +425,23 @@ def test_scaffold_entries_refused_without_staged_contents(tmp_path):
     assert not (tmp_path / "wallet-confs" / "new.conf").exists()
 
 
-def test_plan_apply_writes_exact_bytes(root):
+def test_plan_apply_writes_exact_bytes(root, monkeypatch):
     """P0-B: plan halves plus applier produce the exact expected tree."""
     coin = make_coin()
+    _stub_dust_source(monkeypatch, root, "5460")
     planned = []
     for entries, _ in (
         ConfigAutoFixer.plan_missing_txindex(root, coin),
-        ConfigAutoFixer.plan_normalize_dust(root, coin),
+        ConfigAutoFixer.plan_configure_dust(root, coin),
         ConfigAutoFixer.plan_remove_deprecatedrpc(root, coin),
     ):
         planned.extend(entries)
-    out = apply_entries(planned, root)
+    out = apply_entries(planned, root, regenerate=False)
     assert all(e["applied"] for e in out)
     wallet = (root / "wallet-confs" / "aaa--v1.0.conf").read_text()
     xbridge = (root / "xbridge-confs" / "aaa--v1.0.conf").read_text()
     assert wallet == "rpcuser=x\nDustAmount=100\ntxindex=1\n"
-    assert xbridge == "MinTxFee=0.1\nPort=9999\nDustAmount=0\n"
+    assert xbridge == "MinTxFee=0.1\nPort=9999\nDustAmount=5460\n"
 
 
 def test_apply_plan_file_round_trip(tmp_path):
@@ -1327,7 +1354,7 @@ def test_txindex_plan_ignores_comment_mentions(tmp_path):
     assert entries2 == [], "txindex=0 is present: no plan needed"
 
 
-def test_fix_dispatch_uses_the_structured_fixable_field(tmp_path):
+def test_fix_dispatch_uses_the_structured_fixable_field(tmp_path, monkeypatch):
     """R9 proof-first: fixers must key off `fixable`, not message substrings.
 
     The dispatch used to trigger on four substrings of other modules'
@@ -1348,6 +1375,7 @@ def test_fix_dispatch_uses_the_structured_fixable_field(tmp_path):
     (tmp_path / "wallet-confs" / "aaa--v1.0.conf").write_text("rpcuser=x\n", encoding="utf-8")
     (tmp_path / "xbridge-confs" / "aaa--v1.0.conf").write_text("MinTxFee=0.1\nDustAmount=100\n", encoding="utf-8")
     coin = make_coin()
+    _stub_dust_source(monkeypatch, tmp_path, "5460")
     args = argparse.Namespace(write_config=True, fee_write=False, dry_run=True)
     param_results = {
         coin.ver_id: {

@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .apply_plan import apply_entries, manifest_target
+from .apply_plan import RegenerationError, apply_entries, manifest_target
 from .checkout import (
     SourceCheckoutManager,
     SourceReader,
@@ -33,6 +33,7 @@ from .inspectors import (
     regex_in_block,
 )
 from .inspectors.base import NTIME_SERIALIZED_RE, line_of
+from .inspectors.dust import expectation
 from .model import ManifestCoin, RepoStatus, recommended_fees
 from .ports import PortCollisionManager
 from .probe import RemoteProbeService, SystemCommandRunner
@@ -258,9 +259,13 @@ def _scaffold_fees(src_dir: Path) -> dict[str, Any]:
     if dust is not None:
         out["dust_rate"] = (dust, dust_ev)
     is_go_tree = (src_dir / "go.mod").exists() and SourceReader.slurp(src_dir / "src/chainparams.cpp") is None
-    out["fee_policy"] = (
-        BtcdSourceInspector.fee_policy(src_dir) if is_go_tree else CppSourceInspector.fee_policy(src_dir)
-    )
+    policy = BtcdSourceInspector.fee_policy(src_dir) if is_go_tree else CppSourceInspector.fee_policy(src_dir)
+    out["fee_policy"] = policy
+    # The conf's DustAmount comes from the coin's own gate, computed exactly as
+    # the DUST checker validates it — a scaffold never invents a placeholder.
+    expected = expectation(src_dir=src_dir, rate=rate, rate_ev=rate_ev, dust=dust, dust_ev=dust_ev, policy=policy)
+    if expected is not None:
+        out["dust_amount"] = (expected.value, expected.evidence)
     return out
 
 
@@ -405,6 +410,7 @@ class CoinScaffolder:
         rpc: int,
         mtf: int,
         fpb: int,
+        dust_amount: int,
         conventional: list[str],
     ) -> tuple[str, str]:
         """Render the wallet + xbridge conf pair from the extracted params.
@@ -469,7 +475,7 @@ class CoinScaffolder:
             f"COIN={coin_val}",
             "MinimumAmount=0",
             f"TxVersion={txver}",
-            "DustAmount=0",
+            f"DustAmount={dust_amount}",
             "CreateTxMethod=BTC",
             "GetNewKeySupported=false",
             "ImportWithNoScanSupported=false",
@@ -538,7 +544,12 @@ class CoinScaffolder:
                 report_line(f"ERROR: {gate}")
                 result["error"] = gate
                 return 1
-            out = apply_entries(plan, repo_root, manifest_path=manifest)
+            try:
+                out = apply_entries(plan, repo_root, self.runner, manifest_path=manifest)
+            except RegenerationError as exc:
+                report_line(f"ERROR: {exc}")
+                result["error"] = str(exc)
+                return 1
             refused = [e for e in out if not e.get("applied")]
             for e in refused:
                 report_line(f"  refused {e.get('coin')}: {e.get('file')} — {e.get('error')}")
@@ -554,7 +565,7 @@ class CoinScaffolder:
                 f"Applied: wrote {repo_root / 'wallet-confs' / wallet_name} and "
                 f"{repo_root / 'xbridge-confs' / xbridge_name} and patched manifest ({raw_count} entries now)"
             )
-            report_line(f"Next: run create-j2-confs.py --coins {ticker} and validate in-memory render")
+            report_line(f"Next: validate the in-memory render of {ticker}")
             result["applied"] = True
         else:
             report_line(f"Print-only (no --apply): files under {out_dir} (not in repo)")
@@ -610,6 +621,7 @@ class CoinScaffolder:
             "BlockTime",
             "TxVersion",
             "relay_rate",
+            "dust_amount",
         ):
             if k in params:
                 report_line(f"  {k} = {params[k][0]} ({params[k][1]})")
@@ -721,6 +733,24 @@ class CoinScaffolder:
             return None
         return recommended_fees(fee_policy, relay_entry[0])
 
+    def _dust_gate(self, params: dict[str, Any], result: dict[str, Any]) -> int | None:
+        """The new coin's DustAmount from its own source, or a refusal.
+
+        DustAmount is the only definition of the coin's dust threshold, so a
+        scaffold that cannot prove it must not emit a conf at all — writing a
+        placeholder would put an unvalidated floor into the engines.
+        """
+        entry = params.get("dust_amount")
+        if entry is None:
+            report_line(
+                "ERROR: dust source unresolvable — refusing to emit DustAmount. "
+                "Provide a source tree with a parseable IsDust gate "
+                "(dustRelayFee constant, flat dust limit, or consensus minimum output amount)."
+            )
+            result["error"] = "dust source unresolvable — refusing to emit DustAmount"
+            return None
+        return int(entry[0])
+
     def _scaffold_identity(self, target: Path, ticker: str, tag: str, args: argparse.Namespace) -> dict[str, Any]:
         """Identity, ver_id and the conventional conf names for this coin."""
         title = getattr(args, "scaffold_name", None) or ticker.title()
@@ -780,6 +810,10 @@ class CoinScaffolder:
             return 1, result
         mtf, fpb = fees
 
+        dust_amount = self._dust_gate(params, result)
+        if dust_amount is None:
+            return 1, result
+
         # Conventional (unparsed) defaults are marked inside the generator
         # and reported below — matching the fee refusal above: no silent
         # defaults.
@@ -801,6 +835,7 @@ class CoinScaffolder:
             rpc=rpc,
             mtf=mtf,
             fpb=fpb,
+            dust_amount=dust_amount,
             conventional=conventional,
         )
         if conventional:

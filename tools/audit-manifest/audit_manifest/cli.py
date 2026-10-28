@@ -61,7 +61,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .apply_plan import apply_entries, apply_plan_file, regenerate_for
+from .apply_plan import RegenerationError, apply_entries, apply_plan_file, regenerate_for
 from .checkout import SourceReader
 from .constants import DEFAULT_MANIFEST
 from .findings import ReportInputs, build_report, empty_summary, write_report
@@ -125,13 +125,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     writes.add_argument(
         "--write-config",
         action="store_true",
-        help="Auto-fix missing txindex, dust placeholder, and stale deprecatedrpc",
+        help="Auto-fix missing txindex, the source-derived DustAmount, and stale deprecatedrpc",
+    )
+    writes.add_argument(
+        "--dust-write",
+        action="store_true",
+        help="Auto-fix DustAmount only: write each coin's source-derived dust "
+        "threshold into its xbridge conf and regenerate base.j2",
     )
     writes.add_argument(
         "--dry-run",
         action="store_true",
         help="Compute and report every write a "
-        "--write-config/--fee-write/--fix-ports/--update-versions/--apply/--apply-plan/--delist run would make, "
+        "--write-config/--dust-write/--fee-write/--fix-ports/--update-versions/"
+        "--apply/--apply-plan/--delist run would make, "
         "without touching disk. The report's plan[] entries carry applied=false",
     )
     writes.add_argument(
@@ -243,6 +250,7 @@ def load_manifest(manifest_path: Path) -> list[ManifestCoin]:
 # so without this implication each of them was a silent no-op alone.
 WRITE_FLAGS_REQUIRING_PARAM: tuple[str, ...] = (
     "--write-config",
+    "--dust-write",
     "--fee-write",
     "--fix-ports",
 )
@@ -251,8 +259,8 @@ WRITE_FLAGS_REQUIRING_PARAM: tuple[str, ...] = (
 def apply_flag_implications(args: argparse.Namespace, emit=report_line) -> argparse.Namespace:
     """Turn on --param-check and --fix-ports for flows that need them.
 
-    --write-config, --fee-write and --fix-ports all derive their work from
-    ``param_results``, which ``main()`` only builds inside ``if
+    --write-config, --dust-write, --fee-write and --fix-ports all derive their
+    work from ``param_results``, which ``main()`` only builds inside ``if
     args.param_check``. Each implying flag is announced individually so the
     note always names the flag the operator actually passed, and so a run
     that ended up doing more than was asked for never looks like the plain
@@ -261,7 +269,9 @@ def apply_flag_implications(args: argparse.Namespace, emit=report_line) -> argpa
     Port checks ride along with every plan/write flow the same way:
     a preview or a write without them could bless or introduce a
     fleet collision, so --write-config and --fee-write imply
-    --fix-ports. A bare --dry-run stays cheap: with nothing else to
+    --fix-ports. A dust-only write does not: it never touches a port
+    key, so dragging port reassignment into it would be an unasked-for
+    fleet change. A bare --dry-run stays cheap: with nothing else to
     plan, collisions stay reported as findings instead of moves.
     An explicit ``--param-check`` or ``--fix-ports``
     short-circuits its own implication: there is nothing to announce
@@ -321,13 +331,17 @@ def _apply_plan_verb(
     manifest_path: Path,
 ) -> int:
     """The --apply-plan verb: apply a reviewed plan file."""
-    rc, out = apply_plan_file(
-        Path(args.apply_plan),
-        repo_root,
-        runner,
-        manifest_path=manifest_path,
-        dry_run=bool(getattr(args, "dry_run", False)),
-    )
+    try:
+        rc, out = apply_plan_file(
+            Path(args.apply_plan),
+            repo_root,
+            runner,
+            manifest_path=manifest_path,
+            dry_run=bool(getattr(args, "dry_run", False)),
+        )
+    except RegenerationError as exc:
+        report_line(f"ERROR: {exc}")
+        return 1
     if args.report:
         payload = build_report(
             ReportInputs(
@@ -365,7 +379,11 @@ def _delist_verb(
             report_line(note)
         plan.extend(entries)
     if not dry_run:
-        apply_entries(plan, repo_root, runner, manifest_path=manifest_path)
+        try:
+            apply_entries(plan, repo_root, runner, manifest_path=manifest_path)
+        except RegenerationError as exc:
+            report_line(f"ERROR: {exc}")
+            return 1
         for e in plan:
             if not e.get("applied"):
                 report_line(f"  refused {e.get('coin')}: {e.get('file')} — {e.get('error')}")
@@ -422,6 +440,70 @@ def _audit_phases(  # noqa: PLR0913  # the audit pipeline's inputs, keyword-only
     return local, fleet_maps, fleet_summary, param_results, plan
 
 
+def _emit_audit_report(  # noqa: PLR0913  # report inputs, keyword-only at the call site
+    *,
+    args: argparse.Namespace,
+    full_manifest: list[ManifestCoin],
+    report_repos: dict[str, Any],
+    summary: dict[str, Any],
+    action_summary: dict[ActionType, list[str]],
+    local: dict[str, Any],
+    fleet_summary: dict[str, Any],
+    fleet_maps: dict[str, Any],
+    param_results: dict[str, Any] | None,
+    plan: list[dict[str, Any]],
+) -> None:
+    """Write the JSON report when the run asked for one."""
+    if not args.report:
+        return
+    payload = build_report(
+        ReportInputs(
+            full_manifest=full_manifest,
+            args=args,
+            report_repos=report_repos,
+            summary=summary,
+            action_summary=action_summary,
+            local=local,
+            fleet_summary=fleet_summary,
+            fleet_maps=fleet_maps,
+            param_results=param_results,
+            plan=plan,
+        )
+    )
+    write_report(payload, args.report)
+
+
+def _audit_phases_guarded(  # noqa: PLR0913  # the audit pipeline's inputs, keyword-only at the call site
+    *,
+    args: argparse.Namespace,
+    manifest: list[ManifestCoin],
+    full_manifest_for_fleet: list[ManifestCoin],
+    manifest_path: Path,
+    repo_root: Path,
+    runner: SystemCommandRunner,
+    report_repos: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]] | None:
+    """Run every audit phase, reporting a half-applied write as an error line.
+
+    Returns None when the run wrote a conf but could not mirror it into the
+    template that regenerates it — the caller then exits non-zero without
+    writing a report that would describe the run as applied.
+    """
+    try:
+        return _audit_phases(
+            args=args,
+            manifest=manifest,
+            full_manifest_for_fleet=full_manifest_for_fleet,
+            manifest_path=manifest_path,
+            repo_root=repo_root,
+            runner=runner,
+            report_repos=report_repos,
+        )
+    except RegenerationError as exc:
+        report_line(f"ERROR: {exc}")
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0911  # verb dispatch: one return per verb
     _configure_logging()
     parser = build_arg_parser()
@@ -473,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0911  # verb d
     else:
         report_repos, summary, action_summary = audit_repos(args, manifest, manifest_path, probe_service)
 
-    local, fleet_maps, fleet_summary, param_results, plan = _audit_phases(
+    phases = _audit_phases_guarded(
         args=args,
         manifest=manifest,
         full_manifest_for_fleet=full_manifest_for_fleet,
@@ -482,23 +564,21 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0911  # verb d
         runner=runner,
         report_repos=report_repos,
     )
-
-    if args.report:
-        payload = build_report(
-            ReportInputs(
-                full_manifest=full_manifest_for_fleet,
-                args=args,
-                report_repos=report_repos,
-                summary=summary,
-                action_summary=action_summary,
-                local=local,
-                fleet_summary=fleet_summary,
-                fleet_maps=fleet_maps,
-                param_results=param_results,
-                plan=plan,
-            )
-        )
-        write_report(payload, args.report)
+    if phases is None:
+        return 1
+    local, fleet_maps, fleet_summary, param_results, plan = phases
+    _emit_audit_report(
+        args=args,
+        full_manifest=full_manifest_for_fleet,
+        report_repos=report_repos,
+        summary=summary,
+        action_summary=action_summary,
+        local=local,
+        fleet_summary=fleet_summary,
+        fleet_maps=fleet_maps,
+        param_results=param_results,
+        plan=plan,
+    )
 
     if not getattr(args, "dry_run", False):
         refused = [e for e in plan if isinstance(e, dict) and not e.get("applied")]

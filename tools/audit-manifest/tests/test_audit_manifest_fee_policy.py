@@ -331,9 +331,9 @@ def test_verge_dust_uses_relay_rate_not_step_rate(tmp_path):
     coin = SimpleNamespace(ticker="XVG")
     pol = audit.CppSourceInspector.fee_policy(_verge_tree(tmp_path))
     st, det, *_fix = audit.CommonParamCheckers.check_dust(
-        coin, tmp_path, {"DustAmount": "0"}, 100000, "rev", 10000, "src/policy/policy.h:51", pol
+        coin, tmp_path, {"DustAmount": "10000"}, 100000, "rev", 10000, "src/policy/policy.h:51", pol
     )
-    assert st == audit.ParamStatus.INFO, det
+    assert st == audit.ParamStatus.PASS, det
     assert "10000 sat" in det, det
 
 

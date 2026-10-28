@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -39,26 +40,62 @@ def manifest_target(repo_root: Path, manifest_path: Path | None) -> Path:
     return manifest_path if manifest_path is not None else repo_root / DEFAULT_MANIFEST_NAME
 
 
+class RegenerationError(RuntimeError):
+    """A conf changed but the template that regenerates it did not.
+
+    Every conf is rendered FROM ``autobuild/configs/<ticker>.base.j2``, so a
+    conf write that is not mirrored into its template is reverted the next
+    time the fleet is rendered. The write path must fail loudly instead of
+    leaving the two halves disagreeing.
+    """
+
+
+def base_j2_entry(repo_root: Path, ticker: str) -> dict[str, Any] | None:
+    """The ticker's block in its regenerated base.j2, or None when unreadable."""
+    path = repo_root / "autobuild" / "configs" / f"{ticker.lower()}.base.j2"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    entry = data.get(ticker.upper()) or data.get(ticker)
+    return entry if isinstance(entry, dict) else None
+
+
 def regenerate_base_j2(repo_root: Path, tickers: list[str], runner: SystemCommandRunner | None = None) -> None:
+    """Rebuild each ticker's base.j2 from its confs; raise when that fails.
+
+    ``create-j2-confs.py`` is the only writer of ``autobuild/configs``: it
+    lifts the scalar block out of the newest conf for a ticker. A non-zero
+    exit therefore means the template no longer mirrors the conf that was just
+    written, which would silently revert on the next fleet render — so it is
+    an error, never a log line. A repo with no template layer at all (no
+    ``autobuild/configs``) has nothing to keep in sync and is a no-op.
+    """
     runner = runner or SystemCommandRunner()
     utils_dir = repo_root / "autobuild" / "utils"
     script = utils_dir / "create-j2-confs.py"
     if not script.is_file():
-        logger.warning("create-j2-confs.py not found at %s", script)
-        return
+        if not (repo_root / "autobuild" / "configs").is_dir():
+            return
+        raise RegenerationError(f"create-j2-confs.py missing at {script} — cannot mirror conf writes into base.j2")
 
     for t in tickers:
         logger.info("Regenerating base.j2 for %s ...", t)
         res = runner.run(
-            ["python3", str(script), "--coins", t],
+            [sys.executable, str(script), "--coins", t],
             timeout=60,
             cwd=utils_dir,
             env_extra={"PYTHONUNBUFFERED": "1"},
         )
-        if res and res.returncode == 0:
-            logger.info("Regenerated base.j2 successfully for %s", t)
-        else:
-            logger.error("Failed regenerating base.j2 for %s: %s", t, res.stderr if res else "timeout")
+        if res is None or res.returncode != 0:
+            detail = "timeout" if res is None else (res.stderr or res.stdout or f"exit {res.returncode}")
+            raise RegenerationError(f"base.j2 regeneration failed for {t}: {detail.strip()}")
+        entry = base_j2_entry(repo_root, t)
+        if entry is None:
+            raise RegenerationError(f"base.j2 regeneration produced no {t} block under {repo_root / 'autobuild'}")
+        logger.info("Regenerated base.j2 successfully for %s", t)
 
 
 def _key_match(line: str, key: str) -> bool:
@@ -689,6 +726,10 @@ def _remove_staged_ticker(manifest_path: Path, coin: Any) -> None:
 
 J2_REGEN_ACTIONS = ("txindex", "dust", "deprecatedrpc", "fees", "port", "versions")
 
+# Actions whose value the template carries verbatim at the top level, so the
+# post-write check can assert the regeneration actually mirrored it.
+_J2_VERIFIED_ACTIONS = ("dust",)
+
 
 def regenerate_for(
     entries: list[Any],
@@ -699,7 +740,8 @@ def regenerate_for(
 
     Every applied action that changes a conf a template reads counts, so
     callers that apply several plans in sequence hand the combined list
-    here once instead of paying a generator round per plan.
+    here once instead of paying a generator round per plan. Failures
+    propagate: a conf written without its template is a half-applied run.
     """
     touched = sorted(
         {
@@ -710,10 +752,41 @@ def regenerate_for(
     )
     if not touched or runner is None:
         return
-    try:
-        regenerate_base_j2(repo_root, touched, runner)
-    except Exception as exc:
-        logger.warning("regenerate base.j2 failed: %s", exc)
+    regenerate_base_j2(repo_root, touched, runner)
+    _verify_conf_keys_mirrored(entries, repo_root)
+
+
+def _verify_conf_keys_mirrored(entries: list[Any], repo_root: Path) -> None:
+    """Every written conf key must now appear with the same value in its template.
+
+    A conf edit is only half the change: ``autobuild/configs/<ticker>.base.j2``
+    is what the next render writes back over the conf. Verifying the mirrored
+    value here turns "the run reported success and the change quietly reverted
+    later" into a hard failure at the moment of the write.
+
+    Only scalar block entries are checked (dust today): the template carries
+    them verbatim at the top level, while per-version keys such as txindex live
+    inside the ``versions`` map and port keys are templated placeholders. A
+    repo with no template layer has nothing to mirror and is skipped.
+    """
+    if not (repo_root / "autobuild" / "configs").is_dir():
+        return
+    for entry in entries:
+        if not isinstance(entry, dict) or not entry.get("applied"):
+            continue
+        if entry.get("action") not in _J2_VERIFIED_ACTIONS:
+            continue
+        coin, key, new = entry.get("coin"), entry.get("key"), entry.get("new")
+        if not coin or not key or new is None:
+            continue
+        block = base_j2_entry(repo_root, str(coin))
+        if block is None:
+            raise RegenerationError(f"base.j2 for {coin} has no block — cannot verify {key}={new}")
+        if str(block.get(str(key))) != str(new):
+            raise RegenerationError(
+                f"base.j2 for {coin} did not pick up {key}={new} "
+                f"(template still says {block.get(str(key))!r}) — refusing to leave the conf and template disagreeing"
+            )
 
 
 def apply_entries(

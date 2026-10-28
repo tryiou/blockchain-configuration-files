@@ -18,7 +18,7 @@ import pytest
 
 import audit_manifest as audit
 
-WRITE_FLAGS_NEEDING_PARAM = ("--write-config", "--fee-write", "--fix-ports")
+WRITE_FLAGS_NEEDING_PARAM = ("--write-config", "--dust-write", "--fee-write", "--fix-ports")
 
 
 def _args(*argv: str):

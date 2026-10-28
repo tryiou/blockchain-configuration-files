@@ -19,13 +19,14 @@ from typing import Any, Callable, NamedTuple
 from .apply_plan import apply_entries, key_present, manifest_target
 from .checkout import SourceCheckoutManager, SourceReader
 from .constants import FEE_REF_SIZE, logger
+from .inspectors.dust import expectation
 from .model import ManifestCoin, chain_floor, recommended_fees
 from .params import fee_constants_for_coin, fee_policy_for_coin
 from .ports import PortCollisionManager
 from .probe import SystemCommandRunner
 from .progress import emit
 from .reporting import report_line
-from .util import norm_port_value, plan_entry, repo_relative
+from .util import conf_val_ci, norm_port_value, plan_entry, repo_relative
 from .versioning import (
     VersionEngine,
     apply_additive_bump,
@@ -36,6 +37,77 @@ from .versioning import (
 
 class ConfigAutoFixer:
     """Applies safe in-place fixes to wallet/XBridge configuration files."""
+
+    @staticmethod
+    def _resolve_source_for_fix(coin: ManifestCoin, label: str) -> Path | None:
+        """The coin's checked-out source at its audit entry tag, or None.
+
+        Both source-derived fixers (fees, dust) resolve the tree identically:
+        the entry tag is the numerically newest declared version, never the
+        ``ver_id`` suffix and never insertion order. Every refusal is logged
+        with the fixer's own label so a skipped coin is never silent.
+        """
+        tag = VersionEngine.max_version_tag(set(coin.versions)) if coin.versions else ""
+        if not tag:
+            logger.warning("%s %s: no declared versions, cannot resolve source", label, coin.ticker)
+            return None
+        try:
+            src_dir, mode = SourceCheckoutManager().resolve_source(coin, tag, timeout=60)
+        except ValueError as exc:
+            logger.error("%s %s: %s", label, coin.ticker, exc)
+            return None
+        if not src_dir or mode.startswith(("clone-", "fetch-", "no-")):
+            logger.warning("%s %s: cannot resolve source for %s", label, coin.ticker, tag)
+            return None
+        return src_dir
+
+    @staticmethod
+    def plan_configure_dust(repo_root: Path, coin: ManifestCoin) -> tuple[list[dict[str, Any]], str | None]:
+        """Plan the coin's source-derived DustAmount into its xbridge conf.
+
+        DustAmount is the only definition of the coin's dust threshold, so the
+        plan carries the value the coin's own daemon enforces — computed by the
+        same ``dust.expectation`` the DUST checker uses. An unprovable constant
+        plans nothing: the tool never guesses a fund-loss threshold.
+        """
+        src_dir = ConfigAutoFixer._resolve_source_for_fix(coin, "FIX-DUST")
+        if src_dir is None:
+            return [], None
+        rate, rate_ev, dust, dust_ev = fee_constants_for_coin(coin, src_dir)
+        expected = expectation(
+            src_dir=src_dir,
+            rate=rate,
+            rate_ev=rate_ev,
+            dust=dust,
+            dust_ev=dust_ev,
+            policy=fee_policy_for_coin(coin, src_dir),
+        )
+        if expected is None:
+            logger.warning("FIX-DUST %s: dust constants not located — refusing to guess", coin.ticker)
+            return [], None
+
+        xpath = repo_root / "xbridge-confs" / coin.xbridge_conf
+        if not xpath.is_file():
+            return [], None
+        conf = SourceReader.parse_conf(xpath)
+        old_val = conf_val_ci(conf, "DustAmount").strip() or None
+        target = str(expected.value)
+        if old_val == target:
+            return [], f"PLAN-FIX {coin.ticker}: DustAmount={target} already correct"
+        return [
+            plan_entry(
+                repo_relative(xpath, repo_root),
+                "DustAmount",
+                old_val,
+                target,
+                f"dust threshold is the coin's own {expected.kind.value} gate: {expected.evidence}",
+                "dust",
+                coin=coin.ticker,
+                ver_id=coin.ver_id,
+                evidence=expected.evidence,
+                applied=False,
+            )
+        ], f"PLAN-FIX {coin.ticker}: would set DustAmount={target} in {xpath} ({expected.evidence})"
 
     @staticmethod
     def plan_missing_txindex(repo_root: Path, coin: ManifestCoin) -> tuple[list[dict[str, Any]], str | None]:
@@ -60,35 +132,6 @@ class ConfigAutoFixer:
                 ], f"PLAN {coin.ticker}: would write txindex=1 to {wpath}"
         except OSError as e:
             logger.error("Failed reading txindex state from %s: %s", wpath, e)
-        return [], None
-
-    @staticmethod
-    def plan_normalize_dust(repo_root: Path, coin: ManifestCoin) -> tuple[list[dict[str, Any]], str | None]:
-        xpath = repo_root / "xbridge-confs" / coin.xbridge_conf
-        try:
-            txt = SourceReader.slurp(xpath)
-            if txt is None:
-                return [], None
-            old_val: str | None = None
-            for line in txt.splitlines():
-                if re.match(r"^\s*DustAmount\s*=", line, flags=re.I):
-                    old_val = line.split("=", 1)[1].strip() if "=" in line else None
-                    break
-            return [
-                plan_entry(
-                    repo_relative(xpath, repo_root),
-                    "DustAmount",
-                    old_val,
-                    "0",
-                    "dust placeholder is ignored by the blocknet loader",
-                    "dust",
-                    coin=coin.ticker,
-                    ver_id=coin.ver_id,
-                    applied=False,
-                )
-            ], f"PLAN {coin.ticker}: would normalize DustAmount in {xpath}"
-        except OSError as e:
-            logger.error("Failed reading DustAmount state from %s: %s", xpath, e)
         return [], None
 
     @staticmethod
@@ -120,25 +163,12 @@ class ConfigAutoFixer:
         return [], None
 
     @staticmethod
-    def plan_fee_margin(  # noqa: C901, PLR0911  # fee planner: each return is a distinct resolve/parse refusal, logged before it
+    def plan_fee_margin(  # fee planner: each return is a distinct resolve/parse refusal, logged before it
         repo_root: Path, coin: ManifestCoin
     ) -> tuple[list[dict[str, Any]], str | None]:
         try:
-            mgr = SourceCheckoutManager()
-            tag = VersionEngine.max_version_tag(set(coin.versions)) if coin.versions else ""
-            if not tag:
-                logger.warning("FIX-FEES %s: no declared versions, cannot resolve source", coin.ticker)
-                return [], None
-            try:
-                src_dir, mode = mgr.resolve_source(coin, tag, timeout=60)
-            except ValueError as exc:
-                # Same contract as param-check: an unusable ticker is
-                # data, not a crash — name it as such instead of the
-                # generic failure line below.
-                logger.error("FIX-FEES %s: %s", coin.ticker, exc)
-                return [], None
-            if not src_dir or mode.startswith(("clone-", "fetch-", "no-")):
-                logger.warning("FIX-FEES %s: cannot resolve source for %s", coin.ticker, tag)
+            src_dir = ConfigAutoFixer._resolve_source_for_fix(coin, "FIX-FEES")
+            if src_dir is None:
                 return [], None
             rate, rate_ev, _, _ = fee_constants_for_coin(coin, src_dir)
             policy = fee_policy_for_coin(coin, src_dir)
@@ -242,7 +272,7 @@ def _conf_fix_work_items(
 # One table: the `fixable` kind a checker attaches -> the planner it authorizes.
 _FIXABLE_PLANNERS = {
     "txindex": ConfigAutoFixer.plan_missing_txindex,
-    "dust": ConfigAutoFixer.plan_normalize_dust,
+    "dust": ConfigAutoFixer.plan_configure_dust,
     "deprecatedrpc": ConfigAutoFixer.plan_remove_deprecatedrpc,
     "fees": ConfigAutoFixer.plan_fee_margin,
 }
@@ -262,6 +292,25 @@ def _execute_plan(
             report_line(f"{prefix}refused {e.get('coin')}: {e.get('file')} {e.get('key')} — {e.get('error')}")
 
 
+def _selected_fix_kinds(args: argparse.Namespace) -> set[str]:
+    """The fix kinds this run may plan, derived from the flags it was given.
+
+    ``--write-config`` owns the conf-hygiene kinds (txindex, dust,
+    deprecatedrpc); ``--dust-write`` scopes a run to the dust threshold alone,
+    so a fleet-wide dust pass cannot also reassign ports or rewrite unrelated
+    keys. ``--fee-write`` keeps its existing precedence: when it is passed, the
+    run plans fee margins only, whatever else came with it.
+    """
+    if getattr(args, "fee_write", False):
+        return {"fees"}
+    kinds: set[str] = set()
+    if getattr(args, "write_config", False):
+        kinds.update({"txindex", "dust", "deprecatedrpc"})
+    if getattr(args, "dust_write", False):
+        kinds.add("dust")
+    return kinds
+
+
 def apply_conf_fixes(  # noqa: PLR0913, PLR0917  # fix-aggregator inputs: one per fix knob
     args: argparse.Namespace,
     manifest: list[ManifestCoin],
@@ -270,7 +319,7 @@ def apply_conf_fixes(  # noqa: PLR0913, PLR0917  # fix-aggregator inputs: one pe
     runner: SystemCommandRunner,
     manifest_path: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Derive --write-config / --fee-write fixes from param findings.
+    """Derive --write-config / --dust-write / --fee-write fixes from param findings.
 
     Returns the plan entries. Derivation never writes: entries come
     back with ``applied=False`` and the optional note carries the
@@ -279,18 +328,18 @@ def apply_conf_fixes(  # noqa: PLR0913, PLR0917  # fix-aggregator inputs: one pe
     """
     dry_run = bool(getattr(args, "dry_run", False))
     plan: list[dict[str, Any]] = []
-    if not ((args.write_config or args.fee_write) and param_results is not None):
+    kinds = _selected_fix_kinds(args)
+    if not kinds or param_results is None:
         return plan
 
     work = _conf_fix_work_items(param_results, manifest)
     for idx, (_key, res_dict, coin) in enumerate(work, 1):
         emit("conf-fixes", index=idx, total=len(work), ticker=coin.ticker)
         for chk_dict in res_dict.get("checks", []):
-            if args.fee_write and chk_dict["id"] != "FEES":
+            fixable = chk_dict.get("fixable")
+            if fixable not in kinds:
                 continue
-            # Dispatch keys off the checker-attached `fixable` kind only.
-            # Message text is human-facing and must never gate behavior.
-            planner = _FIXABLE_PLANNERS.get(chk_dict.get("fixable"))
+            planner = _FIXABLE_PLANNERS.get(fixable)
             if planner is None:
                 continue
             entries, note = planner(repo_root, coin)

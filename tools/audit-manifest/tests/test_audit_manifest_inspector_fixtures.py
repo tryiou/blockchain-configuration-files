@@ -199,28 +199,29 @@ def test_dust_derivation_cascades(tmp_path):
     """The dust gate derives per rounding model, with the 3x and segwit variants."""
     policy = _dust_policy("floor")
     dust_ev = "src/policy/policy.cpp:1 nDustRelayFee"
-    dust = 1000  # sat/kB
+    dust = 1000  # sat/kB -> 182 sat at a 182-byte P2PKH spend
 
-    # plain floor model: exact per-size gate at 182 B
+    # the source-derived value is the PASS
     st, det, fixable = _result(
         CommonParamCheckers.check_dust(
-            _btcd_free_coin(), tmp_path, {"DustAmount": "0"}, 3000, "ev", dust, dust_ev, policy
+            _btcd_free_coin(), tmp_path, {"DustAmount": "182"}, 3000, "ev", dust, dust_ev, policy
         )
     )
-    assert st == audit.ParamStatus.INFO and "expected P2PKH" in det, (
-        f"placeholder 0 with a derivable gate must INFO, got {st}: {det[:120]}"
+    assert st == audit.ParamStatus.PASS and "effective threshold" in det, (
+        f"the source-derived value must PASS, got {st}: {det[:120]}"
     )
-    assert fixable is None, "the placeholder-0 INFO carries no fixable kind"
+    assert fixable is None, "a matching value needs no fix"
 
-    # a conf value above the gate is the fixable WARN
-    st, det, fixable = _result(
-        CommonParamCheckers.check_dust(
-            _btcd_free_coin(), tmp_path, {"DustAmount": "999999"}, 3000, "ev", dust, dust_ev, policy
+    # anything else — including the retired placeholder 0 — is the fixable WARN
+    for wrong in ("0", "999999"):
+        st, det, fixable = _result(
+            CommonParamCheckers.check_dust(
+                _btcd_free_coin(), tmp_path, {"DustAmount": wrong}, 3000, "ev", dust, dust_ev, policy
+            )
         )
-    )
-    assert st == audit.ParamStatus.WARN and fixable == "dust", (
-        f"a non-placeholder dust value must WARN with fixable=dust, got {st}/{fixable}: {det[:120]}"
-    )
+        assert st == audit.ParamStatus.WARN and fixable == "dust", (
+            f"DustAmount={wrong} must WARN with fixable=dust, got {st}/{fixable}: {det[:120]}"
+        )
 
     # the 3x multiplier branch: a policy.cpp that applies 3*dustRelayFee
     _write(
@@ -229,11 +230,11 @@ def test_dust_derivation_cascades(tmp_path):
     )
     st, det, _ = _result(
         CommonParamCheckers.check_dust(
-            _btcd_free_coin(), tmp_path, {"DustAmount": "0"}, 3000, "ev", dust, dust_ev, policy
+            _btcd_free_coin(), tmp_path, {"DustAmount": "546"}, 3000, "ev", dust, dust_ev, policy
         )
     )
-    assert st == audit.ParamStatus.INFO and "P2PKH" in det, (
-        f"the 3x factor must still derive a gate, got {st}: {det[:120]}"
+    assert st == audit.ParamStatus.PASS and "P2PKH" in det, (
+        f"the 3x factor must derive 3*182=546, got {st}: {det[:120]}"
     )
 
     # segwit branch: the same file proves a witness-aware IsDust → P2WPKH cited
@@ -243,10 +244,10 @@ def test_dust_derivation_cascades(tmp_path):
     )
     st, det, _ = _result(
         CommonParamCheckers.check_dust(
-            _btcd_free_coin(), tmp_path, {"DustAmount": "0"}, 3000, "ev", dust, dust_ev, policy
+            _btcd_free_coin(), tmp_path, {"DustAmount": "546"}, 3000, "ev", dust, dust_ev, policy
         )
     )
-    assert st == audit.ParamStatus.INFO and "P2WPKH" in det, (
+    assert st == audit.ParamStatus.PASS and "P2WPKH" in det, (
         f"the segwit derivation must cite P2WPKH, got {st}: {det[:120]}"
     )
 
@@ -261,8 +262,8 @@ def test_dust_disabled_and_missing_models(tmp_path):
             _btcd_free_coin(), tmp_path, {"DustAmount": "0"}, None, None, None, None, disabled
         )
     )
-    assert st == audit.ParamStatus.INFO and "disables dust" in det, (
-        f"disabled dust + placeholder 0 is INFO, got {st}: {det[:120]}"
+    assert st == audit.ParamStatus.PASS and "disables dust" in det, (
+        f"a source that disables dust must accept 0, got {st}: {det[:120]}"
     )
     st, det, fixable = _result(
         CommonParamCheckers.check_dust(
