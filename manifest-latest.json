@@ -144,7 +144,7 @@
   {
     "blockchain": "DigiByte",
     "ticker": "DGB",
-    "ver_id": "digibyte--v9.26.5",
+    "ver_id": "digibyte--v9.26.6",
     "ver_name": "DigiByte",
     "conf_name": "digibyte.conf",
     "dir_name_linux": "digibyte",
@@ -152,10 +152,11 @@
     "dir_name_win": "DigiByte",
     "repo_url": "https://github.com/DigiByte-Core/digibyte",
     "versions": [
-      "v9.26.5"
+      "v9.26.6",
+      "v9.26.7"
     ],
-    "xbridge_conf": "digibyte--v9.26.5.conf",
-    "wallet_conf": "digibyte--v9.26.5.conf"
+    "xbridge_conf": "digibyte--v9.26.6.conf",
+    "wallet_conf": "digibyte--v9.26.6.conf"
   },
   {
     "blockchain": "Digiwage",
